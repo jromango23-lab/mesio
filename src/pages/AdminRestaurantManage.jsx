@@ -15,6 +15,7 @@ export default function AdminRestaurantManage() {
   const [importFile, setImportFile] = useState(null);
   const [importUrl, setImportUrl] = useState('');
   const [importMessage, setImportMessage] = useState('');
+  const [importPreview, setImportPreview] = useState(null);
 
   useEffect(() => {
     const fetchRestaurant = async () => {
@@ -236,10 +237,36 @@ export default function AdminRestaurantManage() {
               </div>
               
               <div className="p-6 space-y-6">
-                <form onSubmit={(e) => {
+                 <form onSubmit={(e) => {
                   e.preventDefault();
-                  setImportMessage('La importación automática estará disponible próximamente. Primero podrás revisar los productos antes de guardarlos.');
-                  setTimeout(() => setImportMessage(''), 8000);
+                  if (!importFile && !importUrl.trim()) {
+                    setImportMessage('Por favor, selecciona un archivo PDF o ingresa una dirección URL válida para comenzar el análisis.');
+                    setTimeout(() => setImportMessage(''), 6000);
+                    return;
+                  }
+                  
+                  // Generar datos mock simulados para vista previa
+                  setImportPreview({
+                    isMock: true,
+                    categories: [
+                      {
+                        name: "Entradas Simuladas",
+                        products: [
+                          { name: "Ceviche Clásico (Demo)", price: 12500, description: "Pescado blanco marinado en limón sutil y especias del chef." },
+                          { name: "Empanaditas de Queso (Demo)", price: 5500, description: "Tres unidades rellenas de queso fundido crujientes." }
+                        ]
+                      },
+                      {
+                        name: "Fondos Simulados",
+                        products: [
+                          { name: "Lomo Saltado (Demo)", price: 16900, description: "Trozos de res salteados con cebollas, tomates, servido con papas fritas y arroz." },
+                          { name: "Salmón Grillado (Demo)", price: 15500, description: "Filete de salmón fresco cocinado a la plancha con vegetales de la estación." }
+                        ]
+                      }
+                    ]
+                  });
+                  setImportMessage('Análisis simulado completado con éxito. Se ha generado la vista previa a continuación.');
+                  setTimeout(() => setImportMessage(''), 6000);
                 }} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -309,6 +336,77 @@ export default function AdminRestaurantManage() {
                 </form>
               </div>
             </div>
+
+            {/* Vista previa de importación */}
+            {importPreview && (
+              <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden animate-fade-in">
+                <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-indigo-50/20">
+                  <div className="flex items-center gap-2.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800">Vista previa de importación</h3>
+                      <p className="text-slate-400 text-xs mt-0.5">Revisa las categorías y productos detectados antes de cargarlos en el sistema.</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
+                    Datos simulados para prueba visual
+                  </span>
+                </div>
+
+                <div className="p-6 space-y-6">
+                  {importPreview.categories.map((cat, cIdx) => (
+                    <div key={`preview-cat-${cIdx}`} className="space-y-3">
+                      <h4 className="text-sm font-bold text-slate-800 bg-slate-50 px-3 py-1.5 rounded border border-slate-100 flex items-center justify-between">
+                        <span>Categoría: {cat.name}</span>
+                        <span className="text-[10px] text-slate-400 font-semibold">{cat.products.length} productos detectados</span>
+                      </h4>
+                      
+                      <div className="divide-y divide-slate-100">
+                        {cat.products.map((prod, pIdx) => (
+                          <div key={`preview-prod-${pIdx}`} className="py-3 flex justify-between items-start gap-4 border-b border-slate-100/50 last:border-0">
+                            <div className="space-y-0.5">
+                              <p className="text-sm font-bold text-slate-850">{prod.name}</p>
+                              {prod.description && (
+                                <p className="text-xs text-slate-550 max-w-xl">{prod.description}</p>
+                              )}
+                            </div>
+                            <span className="text-sm font-semibold text-slate-900 whitespace-nowrap">
+                              {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(prod.price || 0)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row justify-end gap-3">
+                    <button
+                      onClick={() => {
+                        setImportPreview(null);
+                        setImportFile(null);
+                        setImportUrl('');
+                        setImportMessage('');
+                      }}
+                      className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer text-center"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setImportMessage('La importación real estará disponible próximamente.');
+                        setTimeout(() => setImportMessage(''), 8000);
+                      }}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer text-center"
+                    >
+                      Confirmar importación
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Categorías del menú */}
             <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
