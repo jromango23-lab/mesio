@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import BrandManager from '../components/BrandManager';
 import CategoriesManager from '../components/CategoriesManager';
+import ProductsManager from '../components/ProductsManager';
 
 export default function AdminRestaurantManage() {
   const { restaurantId } = useParams();
@@ -198,6 +199,16 @@ export default function AdminRestaurantManage() {
           </div>
           <div className="p-6 sm:p-8">
             <CategoriesManager targetRestaurantId={restaurantId} />
+          </div>
+        </div>
+
+        <div className="mt-8 bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="p-6 sm:p-8 bg-slate-900 text-white">
+            <h2 className="text-xl font-bold">Productos del Menú</h2>
+            <p className="text-slate-400 text-sm">Gestiona la lista de productos y precios para este restaurante.</p>
+          </div>
+          <div className="p-6 sm:p-8">
+            <ProductsManager targetRestaurantId={restaurantId} />
           </div>
         </div>
 

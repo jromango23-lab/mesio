@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
-export default function ProductsManager({ restaurantId }) {
+export default function ProductsManager({ restaurantId, targetRestaurantId }) {
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +21,46 @@ export default function ProductsManager({ restaurantId }) {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  const activeRestaurantId = targetRestaurantId || restaurantId;
+
+  useEffect(() => {
+    if (!activeRestaurantId) return;
+
+    const fetchData = async () => {
+      setLoading(true);
+      // Fetch categories
+      const { data: catData, error: catError } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('restaurant_id', activeRestaurantId)
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (!catError && catData) {
+        setCategories(catData);
+        
+        // Si hay categorías, buscamos los productos que pertenecen a ellas
+        if (catData.length > 0) {
+          const categoryIds = catData.map(c => c.id);
+          const { data: prodData, error: prodError } = await supabase
+            .from('products')
+            .select('*, categories(name)')
+            .in('category_id', categoryIds)
+            .order('created_at', { ascending: false });
+
+          if (!prodError && prodData) {
+            setProducts(prodData);
+          }
+        } else {
+          setProducts([]); // Si no hay categorías, no hay productos que mostrar
+        }
+      }
+      setLoading(false);
+    };
+
+    fetchData();
+  }, [activeRestaurantId]);
+
   const handleImageUpload = async (e) => {
     try {
       const file = e.target.files[0];
@@ -31,7 +71,7 @@ export default function ProductsManager({ restaurantId }) {
 
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `${restaurantId}/${fileName}`;
+      const filePath = `${activeRestaurantId}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('products')
@@ -55,45 +95,6 @@ export default function ProductsManager({ restaurantId }) {
       // Reseteamos el valor del input file para permitir subir el mismo archivo si es necesario
       e.target.value = '';
     }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, [restaurantId]);
-
-  const fetchData = async () => {
-    setLoading(true);
-    // Fetch categories
-    const { data: catData, error: catError } = await supabase
-      .from('categories')
-      .select('*')
-      .eq('restaurant_id', restaurantId)
-      .order('display_order', { ascending: true })
-      .order('created_at', { ascending: true });
-
-    if (!catError && catData) {
-      setCategories(catData);
-      if (catData.length > 0 && !formData.category_id) {
-        setFormData(prev => ({ ...prev, category_id: catData[0].id }));
-      }
-      
-      // Si hay categorías, buscamos los productos que pertenecen a ellas
-      if (catData.length > 0) {
-        const categoryIds = catData.map(c => c.id);
-        const { data: prodData, error: prodError } = await supabase
-          .from('products')
-          .select('*, categories(name)')
-          .in('category_id', categoryIds)
-          .order('created_at', { ascending: false });
-
-        if (!prodError && prodData) {
-          setProducts(prodData);
-        }
-      } else {
-        setProducts([]); // Si no hay categorías, no hay productos que mostrar
-      }
-    }
-    setLoading(false);
   };
 
   const handleInputChange = (e) => {
@@ -120,14 +121,16 @@ export default function ProductsManager({ restaurantId }) {
       description: '',
       price: '',
       image_url: '',
-      category_id: categories.length > 0 ? categories[0].id : ''
+      category_id: ''
     });
     setMessage({ type: '', text: '' });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.category_id) {
+    const resolvedCategoryId = formData.category_id || (categories.length > 0 ? categories[0].id : '');
+    
+    if (!formData.name.trim() || !resolvedCategoryId) {
       setMessage({ type: 'error', text: 'El nombre y la categoría son obligatorios.' });
       return;
     }
@@ -136,7 +139,7 @@ export default function ProductsManager({ restaurantId }) {
     setMessage({ type: '', text: '' });
 
     const productPayload = {
-      category_id: formData.category_id,
+      category_id: resolvedCategoryId,
       name: formData.name.trim(),
       description: formData.description.trim(),
       price: parseFloat(formData.price) || 0,
@@ -192,7 +195,17 @@ export default function ProductsManager({ restaurantId }) {
     }
   };
 
+  if (!activeRestaurantId) {
+    return (
+      <div className="bg-red-50 border border-red-200 p-4 rounded-md text-red-700">
+        Error: No se ha especificado un identificador de restaurante válido.
+      </div>
+    );
+  }
+
   if (loading) return <p className="text-gray-500">Cargando datos...</p>;
+
+  const defaultCategoryId = formData.category_id || (categories.length > 0 ? categories[0].id : '');
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -231,7 +244,7 @@ export default function ProductsManager({ restaurantId }) {
               <label className="block text-sm font-medium text-gray-700 mb-1">Categoría *</label>
               <select
                 name="category_id"
-                value={formData.category_id}
+                value={defaultCategoryId}
                 onChange={handleInputChange}
                 className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border bg-white"
                 required
@@ -348,7 +361,7 @@ export default function ProductsManager({ restaurantId }) {
               {products.map(product => (
                 <tr key={product.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
+                     <div className="flex items-center">
                       {product.image_url && (
                         <div className="flex-shrink-0 h-10 w-10 mr-4">
                           <img className="h-10 w-10 rounded-full object-cover" src={product.image_url} alt="" />
