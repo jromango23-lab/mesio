@@ -18,6 +18,7 @@ export default function AdminRestaurantManage() {
   const [importPreview, setImportPreview] = useState(null);
   const [importRefreshKey, setImportRefreshKey] = useState(0);
   const [isImporting, setIsImporting] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     const fetchRestaurant = async () => {
@@ -320,38 +321,91 @@ export default function AdminRestaurantManage() {
                 </div>
               </div>
               
-              <div className="p-6 space-y-6">
-                 <form onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!importFile && !importUrl.trim()) {
-                    setImportMessage('Por favor, selecciona un archivo PDF o ingresa una dirección URL válida para comenzar el análisis.');
-                    setTimeout(() => setImportMessage(''), 6000);
-                    return;
-                  }
-                  
-                  // Generar datos mock simulados para vista previa
-                  setImportPreview({
-                    isMock: true,
-                    categories: [
-                      {
-                        name: "Entradas Simuladas",
-                        products: [
-                          { name: "Ceviche Clásico (Demo)", price: 12500, description: "Pescado blanco marinado en limón sutil y especias del chef." },
-                          { name: "Empanaditas de Queso (Demo)", price: 5500, description: "Tres unidades rellenas de queso fundido crujientes." }
-                        ]
-                      },
-                      {
-                        name: "Fondos Simulados",
-                        products: [
-                          { name: "Lomo Saltado (Demo)", price: 16900, description: "Trozos de res salteados con cebollas, tomates, servido con papas fritas y arroz." },
-                          { name: "Salmón Grillado (Demo)", price: 15500, description: "Filete de salmón fresco cocinado a la plancha con vegetales de la estación." }
-                        ]
+              <div className="p-6">
+                 <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (isAnalyzing) return;
+                    
+                    if (!importFile && !importUrl.trim()) {
+                      setImportMessage('Por favor, selecciona un archivo PDF o ingresa una dirección URL válida para comenzar el análisis.');
+                      setTimeout(() => setImportMessage(''), 6000);
+                      return;
+                    }
+
+                    setIsAnalyzing(true);
+                    setImportMessage('Iniciando análisis con IA...');
+                    setImportPreview(null); // Limpiar previo anterior
+
+                    try {
+                      let responseData = null;
+
+                      if (importFile) {
+                        // Validar límite de 10 MB
+                        if (importFile.size > 10 * 1024 * 1024) {
+                          throw new Error('El archivo PDF excede el límite de 10 MB.');
+                        }
+
+                        // Leer archivo como Base64
+                        const base64Data = await new Promise((resolve, reject) => {
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            const result = reader.result;
+                            if (typeof result === 'string') {
+                              resolve(result.split(',')[1]);
+                            } else {
+                              reject(new Error('Fallo al leer el archivo PDF.'));
+                            }
+                          };
+                          reader.onerror = () => reject(reader.error);
+                          reader.readAsDataURL(importFile);
+                        });
+
+                        const { data, error: invokeError } = await supabase.functions.invoke('analyze-menu-import', {
+                          body: {
+                            type: 'pdf',
+                            pdfData: base64Data,
+                            fileName: importFile.name
+                          }
+                        });
+
+                        if (invokeError) throw invokeError;
+                        responseData = data;
+                      } else {
+                        // Analizar desde URL
+                        const { data, error: invokeError } = await supabase.functions.invoke('analyze-menu-import', {
+                          body: {
+                            type: 'url',
+                            menuUrl: importUrl.trim()
+                          }
+                        });
+
+                        if (invokeError) throw invokeError;
+                        responseData = data;
                       }
-                    ]
-                  });
-                  setImportMessage('Análisis simulado completado con éxito. Se ha generado la vista previa a continuación.');
-                  setTimeout(() => setImportMessage(''), 6000);
-                }} className="space-y-4">
+
+                      if (!responseData || !responseData.categories) {
+                        throw new Error('La respuesta del análisis no contiene categorías válidas.');
+                      }
+
+                      // Mapear "items" de la Edge Function a "products" esperados por la UI
+                      const formattedCategories = responseData.categories.map((cat) => ({
+                        name: cat.name,
+                        products: cat.items || []
+                      }));
+
+                      setImportPreview({
+                        categories: formattedCategories
+                      });
+
+                      setImportMessage('Análisis completado con éxito. Revisa la vista previa a continuación.');
+                      setTimeout(() => setImportMessage(''), 8000);
+                    } catch (err) {
+                      console.error('Error analizando menú:', err);
+                      setImportMessage(err.message || 'Ocurrió un error al intentar analizar el menú.');
+                    } finally {
+                      setIsAnalyzing(false);
+                    }
+                  }} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cargar Archivo PDF</label>
@@ -398,9 +452,15 @@ export default function AdminRestaurantManage() {
                       <div className="pt-4 md:pt-0">
                         <button 
                           type="submit"
-                          className="w-full flex justify-center items-center gap-1.5 py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors cursor-pointer"
+                          disabled={isAnalyzing}
+                          className="w-full flex justify-center items-center gap-1.5 py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors cursor-pointer"
                         >
-                          Analizar menú
+                          {isAnalyzing ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              Analizando...
+                            </>
+                          ) : 'Analizar menú'}
                         </button>
                       </div>
                     </div>
@@ -435,8 +495,8 @@ export default function AdminRestaurantManage() {
                       <p className="text-slate-400 text-xs mt-0.5">Revisa las categorías y productos detectados antes de cargarlos en el sistema.</p>
                     </div>
                   </div>
-                  <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
-                    Datos simulados para prueba visual
+                  <span className="text-[10px] bg-indigo-50 text-indigo-750 border border-indigo-150 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
+                    Vista previa del análisis
                   </span>
                 </div>
 
