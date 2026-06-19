@@ -1,4 +1,4 @@
-﻿import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import PublicMenu from './pages/PublicMenu';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminRoute from './components/AdminRoute';
+import AdminRestaurantManage from './pages/AdminRestaurantManage';
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
@@ -34,6 +35,14 @@ function App() {
             element={
               <AdminRoute>
                 <AdminDashboard />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/restaurants/:restaurantId/manage"
+            element={
+              <AdminRoute>
+                <AdminRestaurantManage />
               </AdminRoute>
             }
           />

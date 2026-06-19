@@ -1,13 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
-export default function BrandManager({ restaurant, onBrandUpdate }) {
+export default function BrandManager({ restaurant, onBrandUpdate, targetRestaurantId }) {
+  const [localRestaurant, setLocalRestaurant] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
   const [primaryColor, setPrimaryColor] = useState(restaurant?.primary_color || '#2563eb');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  
+
+  const currentRestaurant = targetRestaurantId ? localRestaurant : restaurant;
+
+  // Sincronizar el color del picker con los cambios de props (patrón recomendado por React para evitar effects)
+  const [prevColorProp, setPrevColorProp] = useState(restaurant?.primary_color);
+  if (!targetRestaurantId && restaurant && restaurant.primary_color !== prevColorProp) {
+    setPrevColorProp(restaurant.primary_color);
+    setPrimaryColor(restaurant.primary_color || '#2563eb');
+  }
+
+  useEffect(() => {
+    if (targetRestaurantId) {
+      const fetchRestaurant = async () => {
+        try {
+          const { data, error: fetchError } = await supabase
+            .from('restaurants')
+            .select('*')
+            .eq('id', targetRestaurantId)
+            .single();
+
+          if (fetchError) throw fetchError;
+          setLocalRestaurant(data);
+          setPrimaryColor(data.primary_color || '#2563eb');
+        } catch (err) {
+          console.error('Error fetching restaurant in BrandManager:', err);
+          setError('No se pudo cargar la información del restaurante.');
+        }
+      };
+      fetchRestaurant();
+    }
+  }, [targetRestaurantId]);
+
   const handleFileChange = (e) => {
     if (e.target.files.length > 0) {
       setLogoFile(e.target.files[0]);
@@ -18,18 +50,23 @@ export default function BrandManager({ restaurant, onBrandUpdate }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!currentRestaurant) {
+      setError('No hay un restaurante cargado para actualizar.');
+      return;
+    }
+
     setUploading(true);
     setError(null);
     setSuccess(null);
 
-    let newLogoUrl = restaurant.logo_url;
+    let newLogoUrl = currentRestaurant.logo_url;
 
     try {
       // 1. Si hay un nuevo archivo de logo, subirlo
       if (logoFile) {
         const fileExt = logoFile.name.split('.').pop();
         const fileName = `${Date.now()}.${fileExt}`;
-        const filePath = `${restaurant.id}/${fileName}`;
+        const filePath = `${currentRestaurant.id}/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from('restaurant-assets')
@@ -57,7 +94,7 @@ export default function BrandManager({ restaurant, onBrandUpdate }) {
           logo_url: newLogoUrl,
           primary_color: primaryColor,
         })
-        .eq('id', restaurant.id)
+        .eq('id', currentRestaurant.id)
         .select()
         .single();
 
@@ -66,6 +103,9 @@ export default function BrandManager({ restaurant, onBrandUpdate }) {
       }
 
       setSuccess('¡Marca actualizada con éxito!');
+      if (targetRestaurantId) {
+        setLocalRestaurant(data);
+      }
       if (onBrandUpdate) {
         onBrandUpdate(data); // Notificar al Dashboard del cambio
       }
@@ -91,7 +131,7 @@ export default function BrandManager({ restaurant, onBrandUpdate }) {
           <input
             type="text"
             id="restaurantName"
-            value={restaurant?.name || ''}
+            value={currentRestaurant?.name || ''}
             disabled
             className="mt-1 block w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
           />
@@ -102,8 +142,8 @@ export default function BrandManager({ restaurant, onBrandUpdate }) {
             Logo Actual
           </label>
           <div className="mt-1 flex items-center gap-4">
-            {restaurant?.logo_url ? (
-              <img src={restaurant.logo_url} alt="Logo" className="h-16 w-16 object-contain rounded-md bg-gray-100 p-1" />
+            {currentRestaurant?.logo_url ? (
+              <img src={currentRestaurant.logo_url} alt="Logo" className="h-16 w-16 object-contain rounded-md bg-gray-100 p-1" />
             ) : (
               <div className="h-16 w-16 bg-gray-100 rounded-md flex items-center justify-center">
                 <span className="text-xs text-gray-500">Sin logo</span>
