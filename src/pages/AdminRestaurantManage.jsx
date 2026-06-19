@@ -12,6 +12,9 @@ export default function AdminRestaurantManage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importUrl, setImportUrl] = useState('');
+  const [importMessage, setImportMessage] = useState('');
 
   useEffect(() => {
     const fetchRestaurant = async () => {
@@ -220,6 +223,93 @@ export default function AdminRestaurantManage() {
           {/* Columna Principal (2/3 de ancho) */}
           <div className="lg:col-span-2 space-y-8">
             
+            {/* Importar menú */}
+            <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-slate-100 flex items-center gap-2.5 bg-slate-50/50">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">Importar menú</h3>
+                  <p className="text-slate-400 text-xs mt-0.5">Sube un PDF o pega una URL de una carta existente para convertirla en categorías y productos.</p>
+                </div>
+              </div>
+              
+              <div className="p-6 space-y-6">
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  setImportMessage('La importación automática estará disponible próximamente. Primero podrás revisar los productos antes de guardarlos.');
+                  setTimeout(() => setImportMessage(''), 8000);
+                }} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cargar Archivo PDF</label>
+                      <div className="flex items-center justify-center w-full">
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-200 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100/50 transition-colors p-4">
+                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 mb-2.5 text-slate-450" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            <p className="mb-1 text-xs text-slate-500 text-center"><span className="font-semibold text-indigo-600">Haz clic para subir</span> o arrastra</p>
+                            <p className="text-[10px] text-slate-400 font-medium">Solo PDF (máx. 10MB)</p>
+                          </div>
+                          <input 
+                            type="file" 
+                            accept=".pdf" 
+                            className="hidden" 
+                            onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                      </div>
+                      {importFile && (
+                        <p className="mt-2 text-xs text-slate-650 font-semibold flex items-center gap-1.5 bg-slate-50 p-2 rounded border border-slate-200 truncate" title={importFile.name}>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Archivo: {importFile.name}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col justify-between">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Importar desde URL Web</label>
+                        <input 
+                          type="url" 
+                          placeholder="Ej: https://misitio.com/carta-digital" 
+                          value={importUrl} 
+                          onChange={(e) => setImportUrl(e.target.value)} 
+                          className="block w-full rounded-lg border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2.5 text-sm border text-slate-800" 
+                        />
+                        <p className="text-[11px] text-slate-400 mt-2">Introduce la dirección URL de la carta actual de tu restaurante.</p>
+                      </div>
+
+                      <div className="pt-4 md:pt-0">
+                        <button 
+                          type="submit"
+                          className="w-full flex justify-center items-center gap-1.5 py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors cursor-pointer"
+                        >
+                          Analizar menú
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {importMessage && (
+                    <div className="bg-blue-50 border border-blue-200 text-blue-800 p-3.5 rounded-lg text-xs font-medium flex items-start gap-2.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <p className="font-bold text-indigo-900">¡Información!</p>
+                        <p className="mt-0.5">{importMessage}</p>
+                      </div>
+                    </div>
+                  )}
+                </form>
+              </div>
+            </div>
+
             {/* Categorías del menú */}
             <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-slate-100 flex items-center gap-2.5 bg-slate-50/50">
