@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import BrandManager from '../components/BrandManager';
+import CategoriesManager from '../components/CategoriesManager';
 
 export default function AdminRestaurantManage() {
   const { restaurantId } = useParams();
@@ -187,6 +188,16 @@ export default function AdminRestaurantManage() {
               targetRestaurantId={restaurantId} 
               onBrandUpdate={(updatedData) => setRestaurant(updatedData)} 
             />
+          </div>
+        </div>
+
+        <div className="mt-8 bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="p-6 sm:p-8 bg-slate-900 text-white">
+            <h2 className="text-xl font-bold">Categorías del Menú</h2>
+            <p className="text-slate-400 text-sm">Crea, edita o elimina las categorías del menú de este restaurante.</p>
+          </div>
+          <div className="p-6 sm:p-8">
+            <CategoriesManager targetRestaurantId={restaurantId} />
           </div>
         </div>
 

@@ -1,30 +1,32 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
-export default function CategoriesManager({ restaurantId }) {
+export default function CategoriesManager({ restaurantId, targetRestaurantId }) {
   const [categories, setCategories] = useState([]);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
+  const activeRestaurantId = targetRestaurantId || restaurantId;
+
   useEffect(() => {
+    const fetchCategories = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('restaurant_id', activeRestaurantId)
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (!error && data) {
+        setCategories(data);
+      }
+      setLoading(false);
+    };
+
     fetchCategories();
-  }, [restaurantId]);
-
-  const fetchCategories = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('categories')
-      .select('*')
-      .eq('restaurant_id', restaurantId)
-      .order('display_order', { ascending: true })
-      .order('created_at', { ascending: true });
-
-    if (!error && data) {
-      setCategories(data);
-    }
-    setLoading(false);
-  };
+  }, [activeRestaurantId]);
 
   const handleAddCategory = async (e) => {
     e.preventDefault();
@@ -34,7 +36,7 @@ export default function CategoriesManager({ restaurantId }) {
     const { data, error } = await supabase
       .from('categories')
       .insert([
-        { restaurant_id: restaurantId, name: newCategoryName }
+        { restaurant_id: activeRestaurantId, name: newCategoryName }
       ])
       .select();
 
