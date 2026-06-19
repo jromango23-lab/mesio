@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
 import CategoriesManager from '../components/CategoriesManager';
 import ProductsManager from '../components/ProductsManager';
+import BrandManager from '../components/BrandManager';
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
@@ -19,7 +20,7 @@ export default function Dashboard() {
   const [creating, setCreating] = useState(false);
 
   // Estado para controlar qué vista se muestra en el panel
-  const [currentView, setCurrentView] = useState('home'); // 'home', 'categories', 'products'
+  const [currentView, setCurrentView] = useState('home'); // 'home', 'categories', 'products', 'brand', 'qrcode'
 
   useEffect(() => {
     if (user) {
@@ -164,7 +165,7 @@ export default function Dashboard() {
             </div>
             
             {currentView === 'home' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                  <div 
                    onClick={() => setCurrentView('categories')}
                    className="border rounded-lg p-6 hover:shadow-md transition cursor-pointer bg-blue-50 border-blue-100"
@@ -178,6 +179,13 @@ export default function Dashboard() {
                  >
                    <h3 className="font-bold text-lg text-green-800 mb-2">Productos</h3>
                    <p className="text-sm text-green-600">Añade y edita los platillos dentro de tus categorías.</p>
+                 </div>
+                 <div 
+                   onClick={() => setCurrentView('brand')}
+                   className="border rounded-lg p-6 hover:shadow-md transition cursor-pointer bg-yellow-50 border-yellow-100"
+                 >
+                   <h3 className="font-bold text-lg text-yellow-800 mb-2">Marca</h3>
+                   <p className="text-sm text-yellow-600">Personaliza el logo y color de tu menú.</p>
                  </div>
                  {restaurant?.slug && (
                    <div 
@@ -240,6 +248,13 @@ export default function Dashboard() {
               <div>
                 <button onClick={() => setCurrentView('home')} className="mb-4 text-blue-600 hover:underline font-medium">&larr; Volver al inicio</button>
                 <ProductsManager restaurantId={restaurant.id} />
+              </div>
+            )}
+
+            {currentView === 'brand' && (
+              <div>
+                <button onClick={() => setCurrentView('home')} className="mb-4 text-blue-600 hover:underline font-medium">&larr; Volver al inicio</button>
+                <BrandManager restaurant={restaurant} onBrandUpdate={setRestaurant} />
               </div>
             )}
           </div>
