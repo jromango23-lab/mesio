@@ -43,8 +43,8 @@ export default function Login() {
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
-        <p className="mt-4 text-center text-sm text-gray-600">
-          ¿No tienes cuenta? <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500">Regístrate</Link>
+        <p className="mt-6 text-center text-sm text-gray-600">
+          ¿Quieres usar Mesio? Solicita acceso al administrador.
         </p>
       </div>
     </div>
