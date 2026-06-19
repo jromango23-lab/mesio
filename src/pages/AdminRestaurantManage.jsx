@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import BrandManager from '../components/BrandManager';
 import CategoriesManager from '../components/CategoriesManager';
 import ProductsManager from '../components/ProductsManager';
+import { QRCodeCanvas } from 'qrcode.react';
 
 export default function AdminRestaurantManage() {
   const { restaurantId } = useParams();
@@ -209,6 +210,68 @@ export default function AdminRestaurantManage() {
           </div>
           <div className="p-6 sm:p-8">
             <ProductsManager targetRestaurantId={restaurantId} />
+          </div>
+        </div>
+
+        <div className="mt-8 bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="p-6 sm:p-8 bg-slate-900 text-white">
+            <h2 className="text-xl font-bold">Código QR del Menú</h2>
+            <p className="text-slate-400 text-sm">Código QR listo para impresión y distribución para acceder directamente al menú público.</p>
+          </div>
+          <div className="p-6 sm:p-8 flex flex-col items-center text-center">
+            {restaurant && restaurant.slug && (
+              <>
+                <div className="flex justify-center mb-6 bg-white p-4 inline-block rounded-lg shadow-sm border border-slate-100">
+                  <QRCodeCanvas 
+                    id="admin-qr-code-canvas"
+                    value={`${import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin}/menu/${restaurant.slug}`}
+                    size={200}
+                    level={"H"}
+                    includeMargin={true}
+                  />
+                </div>
+                
+                <p className="text-slate-600 text-sm mb-6 break-all bg-slate-50 p-3 rounded-lg border border-slate-100 font-mono w-full select-all">
+                  {`${import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin}/menu/${restaurant.slug}`}
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-md">
+                  <button 
+                    onClick={() => {
+                      const canvas = document.getElementById('admin-qr-code-canvas');
+                      if (canvas) {
+                        const pngUrl = canvas.toDataURL('image/png').replace('image/png', 'image/octet-stream');
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = pngUrl;
+                        downloadLink.download = `qr-${restaurant.slug}.png`;
+                        document.body.appendChild(downloadLink);
+                        downloadLink.click();
+                        document.body.removeChild(downloadLink);
+                      }
+                    }}
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+                  >
+                    Descargar QR
+                  </button>
+
+                  <button 
+                    onClick={handleCopyLink}
+                    className="w-full py-2.5 border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm"
+                  >
+                    {copied ? '¡Copiado!' : 'Copiar link'}
+                  </button>
+
+                  <a 
+                    href={getPublicMenuUrl()} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm text-center"
+                  >
+                    Ver menú
+                  </a>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
