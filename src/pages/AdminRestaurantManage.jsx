@@ -16,6 +16,8 @@ export default function AdminRestaurantManage() {
   const [importUrl, setImportUrl] = useState('');
   const [importMessage, setImportMessage] = useState('');
   const [importPreview, setImportPreview] = useState(null);
+  const [importRefreshKey, setImportRefreshKey] = useState(0);
+  const [isImporting, setIsImporting] = useState(false);
 
   useEffect(() => {
     const fetchRestaurant = async () => {
@@ -55,6 +57,88 @@ export default function AdminRestaurantManage() {
         setTimeout(() => setCopied(false), 2000);
       })
       .catch((err) => console.error('Error copying link:', err));
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreview || !importPreview.categories || importPreview.categories.length === 0) {
+      setImportMessage('Error: No hay datos en la vista previa para importar.');
+      setTimeout(() => setImportMessage(''), 6000);
+      return;
+    }
+
+    const isConfirmed = window.confirm('¿Seguro que quieres importar estas categorías y productos al restaurante?');
+    if (!isConfirmed) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage('Iniciando importación...');
+
+    try {
+      // Recorrer categorías e insertarlas secuencialmente
+      for (let i = 0; i < importPreview.categories.length; i++) {
+        const cat = importPreview.categories[i];
+        
+        // Crear categoría
+        const { data: newCat, error: catError } = await supabase
+          .from('categories')
+          .insert([{
+            restaurant_id: restaurantId,
+            name: cat.name,
+            display_order: i
+          }])
+          .select('id')
+          .single();
+
+        if (catError) {
+          throw new Error(`Error al crear la categoría "${cat.name}": ${catError.message}`);
+        }
+
+        if (!newCat || !newCat.id) {
+          throw new Error(`No se pudo obtener el ID de la categoría recién creada "${cat.name}".`);
+        }
+
+        // Si la categoría tiene productos, crearlos
+        if (cat.products && cat.products.length > 0) {
+          const productsToInsert = cat.products.map(prod => {
+            let cleanPrice = 0;
+            if (prod.price !== undefined && prod.price !== null) {
+              const parsed = Number(prod.price);
+              cleanPrice = isNaN(parsed) ? 0 : parsed;
+            }
+
+            return {
+              category_id: newCat.id,
+              name: prod.name,
+              description: prod.description || null,
+              price: cleanPrice,
+              image_url: null
+            };
+          });
+
+          const { error: prodError } = await supabase
+            .from('products')
+            .insert(productsToInsert);
+
+          if (prodError) {
+            throw new Error(`Error al insertar productos en la categoría "${cat.name}": ${prodError.message}`);
+          }
+        }
+      }
+
+      // Éxito
+      setImportMessage('¡Categorías y productos importados con éxito!');
+      setImportPreview(null);
+      setImportFile(null);
+      setImportUrl('');
+      setImportRefreshKey(prev => prev + 1);
+      setTimeout(() => setImportMessage(''), 8000);
+    } catch (err) {
+      console.error('Error durante la importación:', err);
+      setImportMessage(err.message || 'Ocurrió un error inesperado al guardar la importación.');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   if (loading) {
@@ -395,13 +479,11 @@ export default function AdminRestaurantManage() {
                       Cancelar
                     </button>
                     <button
-                      onClick={() => {
-                        setImportMessage('La importación real estará disponible próximamente.');
-                        setTimeout(() => setImportMessage(''), 8000);
-                      }}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer text-center"
+                      onClick={handleConfirmImport}
+                      disabled={isImporting}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer text-center"
                     >
-                      Confirmar importación
+                      {isImporting ? 'Importando...' : 'Confirmar importación'}
                     </button>
                   </div>
                 </div>
@@ -420,7 +502,7 @@ export default function AdminRestaurantManage() {
                 </div>
               </div>
               <div className="p-6">
-                <CategoriesManager targetRestaurantId={restaurantId} />
+                <CategoriesManager key={`categories-${importRefreshKey}`} targetRestaurantId={restaurantId} />
               </div>
             </div>
 
@@ -436,7 +518,7 @@ export default function AdminRestaurantManage() {
                 </div>
               </div>
               <div className="p-6">
-                <ProductsManager targetRestaurantId={restaurantId} />
+                <ProductsManager key={`products-${importRefreshKey}`} targetRestaurantId={restaurantId} />
               </div>
             </div>
 
