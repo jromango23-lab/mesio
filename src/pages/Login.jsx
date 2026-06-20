@@ -1,6 +1,9 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import { Loader2, ShieldAlert } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -26,24 +29,71 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Iniciar Sesión en Mesio</h2>
-        {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-tr from-slate-50 to-slate-100/50 p-4">
+      {/* Logo y Nombre de Marca */}
+      <div className="flex items-center gap-2.5 mb-8">
+        <div className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-extrabold text-xl shadow-sm">
+          M
+        </div>
+        <span className="text-2xl font-extrabold text-slate-800 tracking-tight">Mesio</span>
+      </div>
+
+      {/* Tarjeta de Login */}
+      <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-md w-full max-w-md">
+        <div className="text-center mb-6">
+          <h2 className="text-xl font-bold text-slate-800">Iniciar Sesión</h2>
+          <p className="text-xs text-slate-400 mt-1 font-medium">Administra tu menú digital</p>
+        </div>
+
+        {error && (
+          <div 
+            className="bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-xs font-semibold flex items-center gap-2 mb-5 animate-fade-in"
+            role="alert"
+          >
+            <ShieldAlert className="h-4 w-4 text-red-650 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border" required />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Contraseña</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border" required />
-          </div>
-          <button type="submit" disabled={loading} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50">
-            {loading ? 'Entrando...' : 'Entrar'}
-          </button>
+          <Input
+            label="Correo electrónico"
+            type="email"
+            placeholder="correo@ejemplo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
+
+          <Input
+            label="Contraseña"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
+
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full h-10 gap-1.5 mt-2"
+            aria-label="Iniciar sesión"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="animate-spin h-4 w-4" />
+                <span>Entrando...</span>
+              </>
+            ) : (
+              <span>Entrar</span>
+            )}
+          </Button>
         </form>
-        <p className="mt-6 text-center text-sm text-gray-600">
+
+        <p className="mt-6 text-center text-xs text-slate-400 font-medium">
           ¿Quieres usar Mesio? Solicita acceso al administrador.
         </p>
       </div>
