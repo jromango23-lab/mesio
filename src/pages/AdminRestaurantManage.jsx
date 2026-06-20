@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import BrandManager from '../components/BrandManager';
 import CategoriesManager from '../components/CategoriesManager';
 import ProductsManager from '../components/ProductsManager';
+import TablesManager from '../components/TablesManager';
 import { QRCodeCanvas } from 'qrcode.react';
 import AppShell from '../components/layout/AppShell';
 import StatCard from '../components/ui/StatCard';
@@ -359,6 +360,7 @@ export default function AdminRestaurantManage() {
     { id: 'importar', label: 'Importar carta', icon: FileUp },
     { id: 'categorias', label: 'Categorías', icon: Folder },
     { id: 'productos', label: 'Productos', icon: Store },
+    { id: 'tables', label: 'Mesas / QR', icon: QrCode },
     { id: 'marca', label: 'Marca', icon: Palette },
     { id: 'qrcode', label: 'Código QR', icon: QrCode }
   ];
@@ -625,7 +627,7 @@ export default function AdminRestaurantManage() {
       {currentView === 'productos' && (
         <div className="space-y-6">
           <SectionHeader
-            title="Productos del Menú"
+            title="Productos"
             description="Gestiona la lista de productos y precios para este restaurante."
             icon={Store}
           />
@@ -633,6 +635,10 @@ export default function AdminRestaurantManage() {
             <ProductsManager key={`products-${importRefreshKey}`} targetRestaurantId={restaurantId} />
           </div>
         </div>
+      )}
+
+      {currentView === 'tables' && (
+        <TablesManager targetRestaurantId={restaurantId} />
       )}
 
       {currentView === 'marca' && (

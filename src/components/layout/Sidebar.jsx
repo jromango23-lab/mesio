@@ -32,9 +32,15 @@ export default function Sidebar({
       <div className="h-14 px-4 border-b border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-2 overflow-hidden">
           {/* Logo */}
-          <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-base flex-shrink-0">
-            M
-          </div>
+          <img
+            src="/brand/mesio-icon.png"
+            alt="Mesio"
+            className="h-8 w-8 object-contain flex-shrink-0"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = "/brand/mesio-logo.png";
+            }}
+          />
           {/* Nombre de Marca */}
           {(!isCollapsed || isMobile) && (
             <div className="flex flex-col truncate">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 const hexToRgba = (hex, alpha) => {
@@ -22,12 +22,16 @@ const hexToRgba = (hex, alpha) => {
 
 export default function PublicMenu() {
   const { slug } = useParams();
+  const [searchParams] = useSearchParams();
+  const tableToken = searchParams.get('table');
+
   const [restaurant, setRestaurant] = useState(null);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [failedImages, setFailedImages] = useState(new Set());
   const [activeCategoryId, setActiveCategoryId] = useState(null);
+  const [tableData, setTableData] = useState(null);
   const isScrollingRef = useRef(false);
   const scrollTimeoutRef = useRef(null);
 
@@ -178,6 +182,7 @@ export default function PublicMenu() {
     try {
       setLoading(true);
       setError(null);
+      setTableData(null); // Reset table state on new fetch
 
       const { data: restData, error: restError } = await supabase
         .from('restaurants')
@@ -196,6 +201,23 @@ export default function PublicMenu() {
       if (!restData.is_active) {
         setLoading(false);
         return;
+      }
+
+      // Check and fetch table data if tableToken exists
+      if (tableToken) {
+        try {
+          const { data: tableRows, error: tableError } = await supabase
+            .rpc('get_public_table_by_token', { p_table_token: tableToken });
+
+          if (!tableError && tableRows && tableRows.length > 0) {
+            const tbl = tableRows[0];
+            if (tbl.restaurant_id === restData.id) {
+              setTableData(tbl);
+            }
+          }
+        } catch (tblErr) {
+          console.error('Error validating table token:', tblErr);
+        }
       }
 
       const { data: menuData, error: menuError } = await supabase
@@ -236,7 +258,7 @@ export default function PublicMenu() {
     return () => {
       active = false;
     };
-  }, [slug]);
+  }, [slug, tableToken]);
 
   // Clean Scroll Spy implementation
   useEffect(() => {
@@ -447,11 +469,21 @@ export default function PublicMenu() {
             {restaurant.name}
           </h1>
 
-          <div className="mt-2.5 flex items-center justify-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-              Menú Online
-            </span>
+          <div className="mt-2.5 flex items-center justify-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                Menú Online
+              </span>
+            </div>
+            {tableData && (
+              <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-fade-in flex items-center gap-1 animate-slide-up">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5" className="h-3 w-3">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+                </svg>
+                Mesa {tableData.table_number}{tableData.table_name ? ` - ${tableData.table_name}` : ''}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -766,7 +798,9 @@ export default function PublicMenu() {
             {/* Drawer Header */}
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div>
-                <h3 className="text-sm font-bold text-slate-800">Estimación de Consumo</h3>
+                <h3 className="text-sm font-bold text-slate-800">
+                  Estimación de Consumo {tableData ? `· Mesa ${tableData.table_number}` : ''}
+                </h3>
                 <span className="text-[10px] text-slate-400 font-medium">Revisa tus productos y propina</span>
               </div>
               <button

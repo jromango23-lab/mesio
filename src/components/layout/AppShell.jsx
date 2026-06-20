@@ -76,8 +76,11 @@ export default function AppShell({
         />
         
         {/* Cuerpo del contenido (scrollable) */}
-        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
-          <div className="max-w-7xl mx-auto w-full">
+        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8 bg-gradient-to-tr from-slate-50 to-slate-100/50 bg-[url('/brand/fondo-movil.png')] md:bg-[url('/brand/fondo-computadora.png')] bg-cover bg-center bg-no-repeat relative">
+          {/* Overlay suave para no competir con el contenido */}
+          <div className="absolute inset-0 bg-slate-50/95 pointer-events-none" />
+          
+          <div className="max-w-7xl mx-auto w-full relative z-10">
             {children}
           </div>
         </main>

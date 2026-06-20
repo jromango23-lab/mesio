@@ -6,6 +6,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import CategoriesManager from '../components/CategoriesManager';
 import ProductsManager from '../components/ProductsManager';
 import BrandManager from '../components/BrandManager';
+import TablesManager from '../components/TablesManager';
 import AppShell from '../components/layout/AppShell';
 import StatCard from '../components/ui/StatCard';
 import Button from '../components/ui/Button';
@@ -153,10 +154,16 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
         {/* Header con Logo */}
-        <div className="flex items-center gap-2 mb-6">
-          <div className="h-9 w-9 bg-blue-600 rounded-lg flex items-center justify-center text-white font-extrabold text-lg shadow-sm">
-            M
-          </div>
+        <div className="flex items-center gap-2.5 mb-6">
+          <img
+            src="/brand/mesio-icon.png"
+            alt="Mesio"
+            className="h-8 w-8 object-contain animate-fade-in"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = "/brand/mesio-logo.png";
+            }}
+          />
           <span className="text-xl font-bold text-slate-800 tracking-tight animate-fade-in">Mesio</span>
         </div>
 
@@ -241,6 +248,7 @@ export default function Dashboard() {
     { id: 'home', label: 'Resumen', icon: LayoutDashboard },
     { id: 'categories', label: 'Categorías', icon: Folder },
     { id: 'products', label: 'Productos', icon: Store },
+    { id: 'tables', label: 'Mesas / QR', icon: QrCode },
     { id: 'brand', label: 'Identidad de marca', icon: Palette },
     { id: 'qrcode', label: 'Código QR', icon: QrCode },
     { id: 'menu-publico', label: 'Ver menú público', icon: ExternalLink },
@@ -417,6 +425,10 @@ export default function Dashboard() {
             <ProductsManager restaurantId={restaurant.id} />
           </div>
         </div>
+      )}
+
+      {currentView === 'tables' && (
+        <TablesManager restaurantId={restaurant.id} />
       )}
 
       {currentView === 'brand' && (

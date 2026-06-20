@@ -4,17 +4,27 @@ import { ArrowLeft, ShieldAlert } from 'lucide-react';
 
 export default function Register() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-tr from-slate-50 to-slate-100/50 p-4">
-      {/* Logo y Nombre de Marca */}
-      <div className="flex items-center gap-2.5 mb-8">
-        <div className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-extrabold text-xl shadow-sm">
-          M
-        </div>
-        <span className="text-2xl font-extrabold text-slate-800 tracking-tight animate-fade-in">Mesio</span>
-      </div>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-tr from-slate-100 to-blue-50/30 bg-[url('/brand/fondo-movil.png')] md:bg-[url('/brand/fondo-computadora.png')] bg-cover bg-center bg-no-repeat p-4 relative">
+      {/* Soft Overlay */}
+      <div className="absolute inset-0 bg-slate-900/15 backdrop-blur-[1px]" />
 
-      {/* Tarjeta de Registro Cerrado */}
-      <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-md w-full max-w-md text-center">
+      {/* Content wrapper with z-index */}
+      <div className="relative z-10 flex flex-col items-center w-full">
+        {/* Logo de Mesio */}
+        <div className="mb-8 flex justify-center">
+          <img
+            src="/brand/mesio-logo.png"
+            alt="Mesio"
+            className="h-12 w-auto max-w-[200px] object-contain animate-fade-in"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = "/brand/mesio-icon.png";
+            }}
+          />
+        </div>
+
+        {/* Tarjeta de Registro Cerrado */}
+        <div className="bg-white/95 backdrop-blur-md p-8 rounded-2xl border border-slate-200/80 shadow-md w-full max-w-md text-center">
         <div className="p-3 bg-red-50 text-red-750 rounded-full mb-4 inline-block border border-red-100/50">
           <ShieldAlert className="h-6 w-6 text-red-650" />
         </div>
@@ -30,6 +40,7 @@ export default function Register() {
             <span>Volver al Login</span>
           </Button>
         </Link>
+      </div>
       </div>
     </div>
   );

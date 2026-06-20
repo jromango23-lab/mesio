@@ -29,17 +29,27 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-tr from-slate-50 to-slate-100/50 p-4">
-      {/* Logo y Nombre de Marca */}
-      <div className="flex items-center gap-2.5 mb-8">
-        <div className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-extrabold text-xl shadow-sm">
-          M
-        </div>
-        <span className="text-2xl font-extrabold text-slate-800 tracking-tight">Mesio</span>
-      </div>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-tr from-slate-100 to-blue-50/30 bg-[url('/brand/fondo-movil.png')] md:bg-[url('/brand/fondo-computadora.png')] bg-cover bg-center bg-no-repeat p-4 relative">
+      {/* Soft Overlay */}
+      <div className="absolute inset-0 bg-slate-900/15 backdrop-blur-[1px]" />
 
-      {/* Tarjeta de Login */}
-      <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-md w-full max-w-md">
+      {/* Content wrapper with z-index */}
+      <div className="relative z-10 flex flex-col items-center w-full">
+        {/* Logo de Mesio */}
+        <div className="mb-8 flex justify-center">
+          <img
+            src="/brand/mesio-logo.png"
+            alt="Mesio"
+            className="h-12 w-auto max-w-[200px] object-contain"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = "/brand/mesio-icon.png";
+            }}
+          />
+        </div>
+
+        {/* Tarjeta de Login */}
+        <div className="bg-white/95 backdrop-blur-md p-8 rounded-2xl border border-slate-200/80 shadow-md w-full max-w-md">
         <div className="text-center mb-6">
           <h2 className="text-xl font-bold text-slate-800">Iniciar Sesión</h2>
           <p className="text-xs text-slate-400 mt-1 font-medium">Administra tu menú digital</p>
@@ -96,6 +106,7 @@ export default function Login() {
         <p className="mt-6 text-center text-xs text-slate-400 font-medium">
           ¿Quieres usar Mesio? Solicita acceso al administrador.
         </p>
+      </div>
       </div>
     </div>
   );
