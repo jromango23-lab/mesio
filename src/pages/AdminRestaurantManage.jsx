@@ -6,6 +6,7 @@ import BrandManager from '../components/BrandManager';
 import CategoriesManager from '../components/CategoriesManager';
 import ProductsManager from '../components/ProductsManager';
 import TablesManager from '../components/TablesManager';
+import ServiceRequestsManager from '../components/ServiceRequestsManager';
 import { QRCodeCanvas } from 'qrcode.react';
 import AppShell from '../components/layout/AppShell';
 import StatCard from '../components/ui/StatCard';
@@ -29,7 +30,8 @@ import {
   TrendingUp,
   CheckCircle2,
   XCircle,
-  UploadCloud
+  UploadCloud,
+  Bell
 } from 'lucide-react';
 
 export default function AdminRestaurantManage() {
@@ -358,6 +360,7 @@ export default function AdminRestaurantManage() {
   const navigationItems = [
     { id: 'resumen', label: 'Resumen del restaurante', icon: LayoutDashboard },
     { id: 'importar', label: 'Importar carta', icon: FileUp },
+    { id: 'requests', label: 'Solicitudes', icon: Bell },
     { id: 'categorias', label: 'Categorías', icon: Folder },
     { id: 'productos', label: 'Productos', icon: Store },
     { id: 'tables', label: 'Mesas / QR', icon: QrCode },
@@ -639,6 +642,17 @@ export default function AdminRestaurantManage() {
 
       {currentView === 'tables' && (
         <TablesManager targetRestaurantId={restaurantId} />
+      )}
+
+      {currentView === 'requests' && (
+        <div className="space-y-6">
+          <SectionHeader
+            title="Solicitudes de Mesa"
+            description="Llamados de mesa y pedidos de cuentas de los clientes."
+            icon={Bell}
+          />
+          <ServiceRequestsManager targetRestaurantId={restaurantId} />
+        </div>
       )}
 
       {currentView === 'marca' && (

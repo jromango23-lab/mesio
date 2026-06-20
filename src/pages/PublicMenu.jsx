@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { Bell, Receipt } from 'lucide-react';
 
 const hexToRgba = (hex, alpha) => {
   if (!hex) return `rgba(79, 70, 229, ${alpha})`;
@@ -32,6 +33,8 @@ export default function PublicMenu() {
   const [failedImages, setFailedImages] = useState(new Set());
   const [activeCategoryId, setActiveCategoryId] = useState(null);
   const [tableData, setTableData] = useState(null);
+  const [requestLoading, setRequestLoading] = useState(false);
+  const [serviceMessage, setServiceMessage] = useState({ type: '', text: '' });
   const isScrollingRef = useRef(false);
   const scrollTimeoutRef = useRef(null);
 
@@ -309,6 +312,48 @@ export default function PublicMenu() {
     }
   }, [activeCategoryId]);
 
+  const handleServiceRequest = async (type) => {
+    if (!tableToken) return;
+    try {
+      setRequestLoading(true);
+      setServiceMessage({ type: '', text: '' });
+
+      const { data, error: rpcError } = await supabase.rpc('create_service_request_from_table', {
+        p_table_token: tableToken,
+        p_request_type: type
+      });
+
+      if (rpcError) throw rpcError;
+
+      if (data && data.length > 0) {
+        const result = data[0];
+        if (result.is_new) {
+          setServiceMessage({
+            type: 'success',
+            text: 'Solicitud enviada al restaurante.'
+          });
+        } else {
+          setServiceMessage({
+            type: 'info',
+            text: 'Ya hay una solicitud pendiente para esta mesa.'
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error sending service request:', err);
+      setServiceMessage({
+        type: 'error',
+        text: 'Ocurrió un error al enviar la solicitud.'
+      });
+    } finally {
+      setRequestLoading(false);
+      // Auto clear message after 4 seconds
+      setTimeout(() => {
+        setServiceMessage({ type: '', text: '' });
+      }, 4000);
+    }
+  };
+
   const handleCategoryClick = (catId) => {
     setActiveCategoryId(catId);
     isScrollingRef.current = true;
@@ -485,6 +530,37 @@ export default function PublicMenu() {
               </span>
             )}
           </div>
+
+          {tableData && (
+            <div className="mt-4 pt-3.5 border-t border-slate-100 flex gap-2.5 justify-center w-full max-w-xs mx-auto animate-fade-in">
+              <button
+                onClick={() => handleServiceRequest('attention')}
+                disabled={requestLoading}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 rounded-lg text-xs font-bold transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                <Bell className="h-3.5 w-3.5 text-blue-650" />
+                <span>Llamar Garzón</span>
+              </button>
+              <button
+                onClick={() => handleServiceRequest('bill')}
+                disabled={requestLoading}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 rounded-lg text-xs font-bold transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                <Receipt className="h-3.5 w-3.5 text-emerald-650" />
+                <span>Pedir Cuenta</span>
+              </button>
+            </div>
+          )}
+
+          {serviceMessage.text && (
+            <div className={`mt-3 text-center text-[11px] font-bold px-3 py-1.5 rounded-lg border animate-fade-in ${
+              serviceMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+              serviceMessage.type === 'info' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+              'bg-red-50 text-red-700 border-red-100'
+            }`}>
+              {serviceMessage.text}
+            </div>
+          )}
         </div>
       </div>
 

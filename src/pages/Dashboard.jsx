@@ -7,6 +7,7 @@ import CategoriesManager from '../components/CategoriesManager';
 import ProductsManager from '../components/ProductsManager';
 import BrandManager from '../components/BrandManager';
 import TablesManager from '../components/TablesManager';
+import ServiceRequestsManager from '../components/ServiceRequestsManager';
 import AppShell from '../components/layout/AppShell';
 import StatCard from '../components/ui/StatCard';
 import Button from '../components/ui/Button';
@@ -24,7 +25,8 @@ import {
   Globe,
   CheckCircle2,
   XCircle,
-  TrendingUp
+  TrendingUp,
+  Bell
 } from 'lucide-react';
 
 export default function Dashboard() {
@@ -44,6 +46,7 @@ export default function Dashboard() {
 
   const [categoriesCount, setCategoriesCount] = useState(0);
   const [productsCount, setProductsCount] = useState(0);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -77,6 +80,17 @@ export default function Dashboard() {
           } else {
             setProductsCount(0);
           }
+        }
+
+        // Fetch pending/seen service requests
+        const { count: reqCount, error: reqError } = await supabase
+          .from('service_requests')
+          .select('*', { count: 'exact', head: true })
+          .eq('restaurant_id', restaurant.id)
+          .in('status', ['pending', 'seen']);
+
+        if (!reqError) {
+          setPendingRequestsCount(reqCount || 0);
         }
       } catch (err) {
         console.error('Error fetching counts for client dashboard:', err);
@@ -246,6 +260,7 @@ export default function Dashboard() {
 
   const navigationItems = [
     { id: 'home', label: 'Resumen', icon: LayoutDashboard },
+    { id: 'requests', label: 'Solicitudes', icon: Bell },
     { id: 'categories', label: 'Categorías', icon: Folder },
     { id: 'products', label: 'Productos', icon: Store },
     { id: 'tables', label: 'Mesas / QR', icon: QrCode },
@@ -335,6 +350,14 @@ export default function Dashboard() {
               icon={Store}
               className="cursor-pointer"
               onClick={() => setCurrentView('products')}
+            />
+            <StatCard
+              title="Solicitudes Activas"
+              value={pendingRequestsCount}
+              description="Llamados de mesa pendientes"
+              icon={Bell}
+              className="cursor-pointer"
+              onClick={() => setCurrentView('requests')}
             />
           </div>
         </div>
@@ -429,6 +452,17 @@ export default function Dashboard() {
 
       {currentView === 'tables' && (
         <TablesManager restaurantId={restaurant.id} />
+      )}
+
+      {currentView === 'requests' && (
+        <div className="space-y-6">
+          <SectionHeader
+            title="Solicitudes de Mesa"
+            description="Atiende los llamados de tus clientes y solicitudes de cuentas en tiempo real."
+            icon={Bell}
+          />
+          <ServiceRequestsManager restaurantId={restaurant.id} />
+        </div>
       )}
 
       {currentView === 'brand' && (
