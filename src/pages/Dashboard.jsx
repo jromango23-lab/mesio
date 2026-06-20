@@ -54,51 +54,75 @@ export default function Dashboard() {
     }
   }, [user]);
 
+  const fetchCounts = async () => {
+    if (!restaurant?.id) return;
+    try {
+      const { data: catData, error: catError } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('restaurant_id', restaurant.id);
+
+      if (!catError && catData) {
+        setCategoriesCount(catData.length);
+        if (catData.length > 0) {
+          const catIds = catData.map(c => c.id);
+          const { count, error: prodError } = await supabase
+            .from('products')
+            .select('*', { count: 'exact', head: true })
+            .in('category_id', catIds);
+
+          if (!prodError) {
+            setProductsCount(count || 0);
+          }
+        } else {
+          setProductsCount(0);
+        }
+      }
+
+      // Fetch pending/seen service requests
+      const { count: reqCount, error: reqError } = await supabase
+        .from('service_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('restaurant_id', restaurant.id)
+        .in('status', ['pending', 'seen']);
+
+      if (!reqError) {
+        setPendingRequestsCount(reqCount || 0);
+      }
+    } catch (err) {
+      console.error('Error fetching counts for client dashboard:', err);
+    }
+  };
+
   // Fetch counts dynamically when restaurant changes or when switching view
+  useEffect(() => {
+    fetchCounts();
+  }, [restaurant?.id, currentView]);
+
+  // Subscribe to postgres_changes on service_requests to keep counts in sync
   useEffect(() => {
     if (!restaurant?.id) return;
 
-    const fetchCounts = async () => {
-      try {
-        const { data: catData, error: catError } = await supabase
-          .from('categories')
-          .select('id')
-          .eq('restaurant_id', restaurant.id);
-
-        if (!catError && catData) {
-          setCategoriesCount(catData.length);
-          if (catData.length > 0) {
-            const catIds = catData.map(c => c.id);
-            const { count, error: prodError } = await supabase
-              .from('products')
-              .select('*', { count: 'exact', head: true })
-              .in('category_id', catIds);
-
-            if (!prodError) {
-              setProductsCount(count || 0);
-            }
-          } else {
-            setProductsCount(0);
-          }
+    const channel = supabase
+      .channel(`dashboard_requests_count_${restaurant.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'service_requests',
+          filter: `restaurant_id=eq.${restaurant.id}`
+        },
+        () => {
+          fetchCounts();
         }
+      )
+      .subscribe();
 
-        // Fetch pending/seen service requests
-        const { count: reqCount, error: reqError } = await supabase
-          .from('service_requests')
-          .select('*', { count: 'exact', head: true })
-          .eq('restaurant_id', restaurant.id)
-          .in('status', ['pending', 'seen']);
-
-        if (!reqError) {
-          setPendingRequestsCount(reqCount || 0);
-        }
-      } catch (err) {
-        console.error('Error fetching counts for client dashboard:', err);
-      }
+    return () => {
+      supabase.removeChannel(channel);
     };
-
-    fetchCounts();
-  }, [restaurant?.id, currentView]);
+  }, [restaurant?.id]);
 
   const checkRestaurant = async () => {
     try {

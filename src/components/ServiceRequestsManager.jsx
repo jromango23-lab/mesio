@@ -57,6 +57,92 @@ export default function ServiceRequestsManager({ restaurantId, targetRestaurantI
 
   useEffect(() => {
     fetchRequests();
+
+    if (!activeRestaurantId) return;
+
+    // Subscribe to postgres_changes for public.service_requests table
+    const channel = supabase
+      .channel(`service_requests_active_${activeRestaurantId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'service_requests',
+          filter: `restaurant_id=eq.${activeRestaurantId}`
+        },
+        async (payload) => {
+          const { eventType, new: newRecord, old: oldRecord } = payload;
+          
+          if (eventType === 'INSERT') {
+            try {
+              // Realtime payload does not include joined relations.
+              // Fetch detail including restaurant_tables.
+              const { data, error } = await supabase
+                .from('service_requests')
+                .select(`
+                  id,
+                  request_type,
+                  status,
+                  message,
+                  created_at,
+                  restaurant_tables (
+                    table_number,
+                    table_name
+                  )
+                `)
+                .eq('id', newRecord.id)
+                .single();
+
+              if (!error && data) {
+                setRequests(prev => {
+                  // Prevent duplicates
+                  const exists = prev.some(r => r.id === data.id);
+                  if (exists) return prev;
+                  
+                  // Add decorated item with temporary highlight
+                  const decoratedItem = { ...data, isNewRealtime: true };
+                  
+                  // Setup auto-clear after 5 seconds
+                  setTimeout(() => {
+                    setRequests(current => 
+                      current.map(r => r.id === data.id ? { ...r, isNewRealtime: false } : r)
+                    );
+                  }, 5000);
+
+                  return [decoratedItem, ...prev];
+                });
+              }
+            } catch (err) {
+              console.error('Error fetching realtime request detail:', err);
+            }
+          } else if (eventType === 'UPDATE') {
+            setRequests(prev => {
+              const exists = prev.some(r => r.id === newRecord.id);
+              if (!exists) return prev;
+
+              return prev.map(r => {
+                if (r.id === newRecord.id) {
+                  // Retain table info from previous state since 'newRecord' doesn't contain relations
+                  return { ...r, status: newRecord.status, message: newRecord.message };
+                }
+                return r;
+              });
+            });
+          } else if (eventType === 'DELETE') {
+            setRequests(prev => prev.filter(r => r.id !== oldRecord.id));
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('Realtime subscription failed, using manual fallback.');
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [activeRestaurantId]);
 
   const showMsg = (type, text) => {
@@ -188,7 +274,9 @@ export default function ServiceRequestsManager({ restaurantId, targetRestaurantI
               <div 
                 key={req.id} 
                 className={`bg-white rounded-xl border p-4 flex flex-col justify-between gap-4 transition-all ${
-                  isPending 
+                  req.isNewRealtime
+                    ? 'border-indigo-400 bg-indigo-50/25 ring-2 ring-indigo-100 animate-pulse'
+                    : isPending 
                     ? 'border-blue-200 shadow-xs bg-blue-50/5' 
                     : isSeen 
                     ? 'border-slate-200 bg-white' 
