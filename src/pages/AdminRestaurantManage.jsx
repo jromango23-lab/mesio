@@ -337,6 +337,11 @@ export default function AdminRestaurantManage() {
                     setImportPreview(null); // Limpiar previo anterior
 
                     try {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      if (!session || !session.access_token) {
+                        throw new Error('No hay sesión activa de administrador.');
+                      }
+
                       let responseData = null;
 
                       if (importFile) {
@@ -361,6 +366,9 @@ export default function AdminRestaurantManage() {
                         });
 
                         const { data, error: invokeError } = await supabase.functions.invoke('analyze-menu-import', {
+                          headers: {
+                            Authorization: `Bearer ${session.access_token}`,
+                          },
                           body: {
                             type: 'pdf',
                             pdfData: base64Data,
@@ -373,6 +381,9 @@ export default function AdminRestaurantManage() {
                       } else {
                         // Analizar desde URL
                         const { data, error: invokeError } = await supabase.functions.invoke('analyze-menu-import', {
+                          headers: {
+                            Authorization: `Bearer ${session.access_token}`,
+                          },
                           body: {
                             type: 'url',
                             menuUrl: importUrl.trim()

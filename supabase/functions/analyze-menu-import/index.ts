@@ -89,8 +89,10 @@ serve(async (req) => {
   try {
     // 1. VALIDAR QUE EL LLAMANTE ES UN ADMINISTRADOR
     const authHeader = req.headers.get('Authorization')
+    console.log('[Auth] Validando cabecera Authorization...');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'No se proporcionó cabecera de autenticación.' }), {
+      console.log('[Auth] Error: No se recibió cabecera Authorization.');
+      return new Response(JSON.stringify({ error: 'No se recibió token de autorización.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 401,
       })
@@ -102,26 +104,42 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     )
 
+    console.log('[Auth] Consultando auth.getUser()...');
     const { data: { user }, error: userError } = await userSupabaseClient.auth.getUser()
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Usuario no autenticado o token vencido.' }), {
+      console.log('[Auth] Error al obtener usuario:', userError?.message || 'Usuario nulo');
+      return new Response(JSON.stringify({ error: 'Token inválido o sesión expirada.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 401,
       })
     }
     
+    console.log('[Auth] Usuario autenticado con ID:', user.id);
+
+    console.log('[Auth] Consultando tabla public.admin_users...');
     const { data: admin, error: adminError } = await userSupabaseClient
       .from('admin_users')
       .select('user_id')
       .eq('user_id', user.id)
       .single()
 
-    if (adminError || !admin) {
-      return new Response(JSON.stringify({ error: 'Usuario no autorizado. Se requieren permisos de administrador.' }), {
+    if (adminError) {
+      console.log('[Auth] Error al consultar admin_users:', adminError.message);
+      return new Response(JSON.stringify({ error: 'Usuario no autorizado como administrador.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 401,
       })
     }
+
+    if (!admin) {
+      console.log('[Auth] Usuario no encontrado en admin_users.');
+      return new Response(JSON.stringify({ error: 'Usuario no autorizado como administrador.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401,
+      })
+    }
+
+    console.log('[Auth] Usuario autorizado como administrador.');
 
     // 2. PARSEAR CUERPO DE PETICIÓN
     const { type, menuUrl, pdfData }: AnalyzeRequest = await req.json()
