@@ -111,6 +111,7 @@ export default function AdminRestaurantManage() {
 
         // Si la categoría tiene productos, crearlos
         if (cat.products && cat.products.length > 0) {
+          const isFromUrl = !importFile;
           const productsToInsert = cat.products.map(prod => {
             let cleanPrice = 0;
             if (prod.price !== undefined && prod.price !== null) {
@@ -118,12 +119,22 @@ export default function AdminRestaurantManage() {
               cleanPrice = isNaN(parsed) ? 0 : parsed;
             }
 
+            let cleanImageUrl = null;
+            if (
+              isFromUrl &&
+              prod.image_confidence === 'high' &&
+              prod.image_url &&
+              (prod.image_url.startsWith('http://') || prod.image_url.startsWith('https://'))
+            ) {
+              cleanImageUrl = prod.image_url;
+            }
+
             return {
               category_id: newCat.id,
               name: prod.name,
               description: prod.description || null,
               price: cleanPrice,
-              image_url: null
+              image_url: cleanImageUrl
             };
           });
 
@@ -542,11 +553,45 @@ export default function AdminRestaurantManage() {
                       <div className="divide-y divide-slate-100">
                         {cat.products.map((prod, pIdx) => (
                           <div key={`preview-prod-${pIdx}`} className="py-3 flex justify-between items-start gap-4 border-b border-slate-100/50 last:border-0">
-                            <div className="space-y-0.5">
-                              <p className="text-sm font-bold text-slate-850">{prod.name}</p>
-                              {prod.description && (
-                                <p className="text-xs text-slate-550 max-w-xl">{prod.description}</p>
+                            <div className="flex gap-3 items-start">
+                              {prod.image_url && (
+                                <img 
+                                  src={prod.image_url} 
+                                  alt={prod.name} 
+                                  className="h-12 w-12 rounded-lg object-cover border border-slate-200 p-0.5 bg-white flex-shrink-0"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                  }}
+                                />
                               )}
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-bold text-slate-850">{prod.name}</p>
+                                  {prod.image_confidence === 'high' && (
+                                    <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-150 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                                      Imagen detectada: alta confianza
+                                    </span>
+                                  )}
+                                  {prod.image_confidence === 'medium' && (
+                                    <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-150 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                                      Posible imagen: revisar
+                                    </span>
+                                  )}
+                                  {prod.image_confidence === 'low' && (
+                                    <span className="text-[9px] bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                                      Posible imagen: baja confianza
+                                    </span>
+                                  )}
+                                </div>
+                                {prod.description && (
+                                  <p className="text-xs text-slate-550 max-w-xl">{prod.description}</p>
+                                )}
+                                {prod.image_hint && (
+                                  <p className="text-[10px] text-slate-400 italic">
+                                    Sugerencia visual: {prod.image_hint}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                             <span className="text-sm font-semibold text-slate-900 whitespace-nowrap">
                               {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(prod.price || 0)}

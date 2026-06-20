@@ -20,12 +20,53 @@ const fetchAndCleanHtml = async (url: string): Promise<string> => {
   if (!response.ok) {
     throw new Error(`Error al descargar la página del menú: ${response.status} ${response.statusText}`);
   }
-  const html = await response.text();
+  let html = await response.text();
   
-  // Limpieza básica de HTML
-  let cleanText = html
+  // 1. Eliminar scripts y estilos antes de procesar
+  html = html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Eliminar scripts
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')   // Eliminar estilos
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');   // Eliminar estilos
+
+  // 2. Procesar etiquetas de imagen <img>
+  const imgRegex = /<img\b([^>]*)>/gi;
+  html = html.replace(imgRegex, (match, attrs) => {
+    // Extraer atributos src, alt, class e id
+    const srcMatch = attrs.match(/src=["']([^"']+)["']/i);
+    const altMatch = attrs.match(/alt=["']([^"']*)["']/i);
+    const classMatch = attrs.match(/class=["']([^"']*)["']/i);
+    const idMatch = attrs.match(/id=["']([^"']*)["']/i);
+
+    const src = srcMatch ? srcMatch[1].trim() : '';
+    const alt = altMatch ? altMatch[1].trim() : '';
+    const className = classMatch ? classMatch[1].trim() : '';
+    const id = idMatch ? idMatch[1].trim() : '';
+
+    if (!src) return '';
+    // Ignorar base64 o data:image y blob:
+    if (src.startsWith('data:') || src.startsWith('blob:')) return '';
+
+    // Filtrar logos, banners, redes sociales, etc.
+    const forbiddenKeywords = [
+      'logo', 'banner', 'header', 'footer', 'nav', 'icon', 'social', 
+      'facebook', 'instagram', 'whatsapp', 'twitter', 'sprite', 
+      'placeholder', 'avatar', 'bg-', 'background', 'spacer',
+      '16x16', '32x32', '64x64'
+    ];
+
+    const targetString = `${src} ${alt} ${className} ${id}`.toLowerCase();
+    const shouldIgnore = forbiddenKeywords.some(kw => targetString.includes(kw));
+    if (shouldIgnore) return '';
+
+    try {
+      const absoluteUrl = new URL(src, url).href;
+      return ` ![imagen_plato: ${alt || 'producto'}](${absoluteUrl}) `;
+    } catch {
+      return '';
+    }
+  });
+
+  // 3. Eliminar el resto de etiquetas HTML
+  let cleanText = html
     .replace(/<[^>]+>/g, ' ')                                           // Eliminar etiquetas HTML
     .replace(/\s+/g, ' ')                                               // Normalizar espacios
     .trim();
@@ -61,11 +102,29 @@ const normalizeResult = (data: any) => {
         const num = Number(rawPrice);
         price = isNaN(num) ? null : num;
       }
+
+      // Procesar campos de imagen
+      let imageUrl = null;
+      const rawImageUrl = item.image_url !== undefined ? item.image_url : item.imageUrl;
+      if (typeof rawImageUrl === 'string' && rawImageUrl.trim() !== '') {
+        imageUrl = rawImageUrl.trim();
+      }
+
+      const imageHint = String(item.image_hint !== undefined && item.image_hint !== null ? item.image_hint : '').trim();
+
+      let imageConfidence = 'none';
+      const rawConfidence = String(item.image_confidence !== undefined && item.image_confidence !== null ? item.image_confidence : '').trim().toLowerCase();
+      if (['high', 'medium', 'low', 'none'].includes(rawConfidence)) {
+        imageConfidence = rawConfidence;
+      }
       
       return {
         name: pName,
         description,
-        price
+        price,
+        image_url: imageUrl,
+        image_hint: imageHint,
+        image_confidence: imageConfidence
       };
     }) : [];
     
@@ -164,8 +223,12 @@ serve(async (req) => {
 Sigue estas reglas estrictamente:
 1. Divide el menú en categorías lógicas (ej: Entradas, Ensaladas, Platos Principales, Postres, Bebidas, etc.).
 2. Para cada categoría, extrae la lista de productos con su nombre, descripción (si existe, de lo contrario deja "") y precio (si existe y es un número de valor monetario válido, de lo contrario usa null).
-3. No inventes platos ni categorías que no aparezcan en el texto o documento provisto.
-4. Responde ÚNICAMENTE con el objeto JSON válido que cumpla la estructura solicitada.
+3. Para cada plato, analiza e intenta asociar una imagen de la siguiente manera:
+   - Para URLs: Si encuentras una imagen en formato Markdown ![alt](url) cercana al nombre del plato o en el mismo bloque, colócala en "image_url". Si es de alta certeza que corresponde a ese plato, pon "image_confidence": "high". Si es de mediana certeza, pon "image_confidence": "medium". Si es de baja certeza, pon "image_confidence": "low". De lo contrario, pon "image_url": null e "image_confidence": "none".
+   - Para PDFs: Como no hay URLs en el documento, pon siempre "image_url": null. Si ves una imagen visualmente ligada a un plato en el documento PDF, pon una breve descripción de lo que se ve en la imagen en "image_hint" (ej: "Hamburguesa con papas fritas") y define "image_confidence" ("high", "medium", "low" o "none").
+   - Para "image_hint": Coloca una descripción de la imagen detectada si corresponde, de lo contrario deja "".
+4. No inventes platos, categorías ni URLs de imágenes. Si no hay relación clara, "image_url" debe ser null e "image_confidence" debe ser "none".
+5. Responde ÚNICAMENTE con el objeto JSON válido que cumpla la estructura solicitada.
 
 Estructura JSON requerida:
 {
@@ -176,7 +239,10 @@ Estructura JSON requerida:
         {
           "name": "Nombre del producto",
           "description": "Descripción opcional",
-          "price": 4990
+          "price": 4990,
+          "image_url": null,
+          "image_hint": "",
+          "image_confidence": "none"
         }
       ]
     }
