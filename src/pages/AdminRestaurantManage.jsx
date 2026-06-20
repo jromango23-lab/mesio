@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import BrandManager from '../components/BrandManager';
 import CategoriesManager from '../components/CategoriesManager';
@@ -8,10 +8,20 @@ import { QRCodeCanvas } from 'qrcode.react';
 
 export default function AdminRestaurantManage() {
   const { restaurantId } = useParams();
+  const navigate = useNavigate();
   const [restaurant, setRestaurant] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      navigate('/login');
+    } catch (err) {
+      console.error('Error signing out:', err);
+    }
+  };
   const [importFile, setImportFile] = useState(null);
   const [importUrl, setImportUrl] = useState('');
   const [importMessage, setImportMessage] = useState('');
@@ -185,9 +195,19 @@ export default function AdminRestaurantManage() {
               </span>
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
               <span className="text-xs font-semibold text-slate-400 font-mono hidden sm:inline">ID: {restaurant.id}</span>
+              <span className="text-slate-300 hidden sm:inline">|</span>
+              <button
+                onClick={handleSignOut}
+                className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-550" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Cerrar sesión
+              </button>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 function CreateClientForm({ onClientCreated, showNotification }) {
   const [email, setEmail] = useState('');
@@ -145,10 +145,21 @@ function CreateClientForm({ onClientCreated, showNotification }) {
 }
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      navigate('/login');
+    } catch (err) {
+      console.error('Error signing out:', err);
+      showNotification('Error al cerrar sesión.', 'error');
+    }
+  };
 
   const fetchRestaurants = useCallback(async () => {
     try {
@@ -289,9 +300,20 @@ export default function AdminDashboard() {
               <span className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">M</span>
               <span className="text-xl font-bold text-slate-800 tracking-tight">Mesio Hub</span>
             </div>
-            <span className="text-xs bg-slate-100 text-slate-600 px-3 py-1.5 rounded-full font-bold uppercase tracking-wider">
-              Control de Administrador
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs bg-slate-100 text-slate-600 px-3 py-1.5 rounded-full font-bold uppercase tracking-wider">
+                Control de Administrador
+              </span>
+              <button
+                onClick={handleSignOut}
+                className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-sm transition-colors cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-550" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Cerrar sesión
+              </button>
+            </div>
           </div>
         </div>
       </nav>
