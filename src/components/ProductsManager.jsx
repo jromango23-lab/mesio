@@ -7,6 +7,8 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
   const [loading, setLoading] = useState(true);
   
   const [editingId, setEditingId] = useState(null);
+  const [selectedProductIds, setSelectedProductIds] = useState([]);
+  const [deletingMultiple, setDeletingMultiple] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -28,6 +30,7 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
 
     const fetchData = async () => {
       setLoading(true);
+      setSelectedProductIds([]); // Limpiar selección al cambiar de restaurante o recargar
       // Fetch categories
       const { data: catData, error: catError } = await supabase
         .from('categories')
@@ -191,7 +194,53 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
       setMessage({ type: 'error', text: 'Error al eliminar el producto: ' + error.message });
     } else {
       setProducts(products.filter(p => p.id !== id));
+      setSelectedProductIds(prev => prev.filter(item => item !== id));
       setMessage({ type: 'success', text: 'Producto eliminado.' });
+    }
+  };
+
+  const handleSelectToggle = (id) => {
+    setSelectedProductIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllToggle = () => {
+    if (selectedProductIds.length === products.length) {
+      setSelectedProductIds([]);
+    } else {
+      setSelectedProductIds(products.map(p => p.id));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedProductIds.length === 0) return;
+
+    if (!window.confirm(`¿Seguro que quieres eliminar los ${selectedProductIds.length} productos seleccionados?`)) {
+      return;
+    }
+
+    setDeletingMultiple(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .in('id', selectedProductIds);
+
+      if (error) {
+        setMessage({ type: 'error', text: 'Error al eliminar productos seleccionados: ' + error.message });
+      } else {
+        setProducts(prev => prev.filter(p => !selectedProductIds.includes(p.id)));
+        setSelectedProductIds([]);
+        setMessage({ type: 'success', text: 'Productos seleccionados eliminados correctamente.' });
+      }
+    } catch (err) {
+      console.error('Error deleting selected products:', err);
+      setMessage({ type: 'error', text: 'Ocurrió un error inesperado al intentar eliminar los productos.' });
+    } finally {
+      setDeletingMultiple(false);
     }
   };
 
@@ -344,6 +393,46 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
 
       {/* Lista de productos */}
       <h3 className="font-semibold text-gray-700 mb-4">Lista de Productos</h3>
+      
+      {/* Barra de Acciones Masivas */}
+      {products.length > 0 && (
+        <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 mb-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSelectAllToggle}
+              className="text-xs bg-white border border-gray-300 hover:bg-gray-100 px-2.5 py-1.5 rounded text-gray-700 font-semibold shadow-sm transition-colors cursor-pointer"
+            >
+              {selectedProductIds.length === products.length ? 'Deseleccionar todo' : 'Seleccionar todo'}
+            </button>
+            <span className="text-xs text-gray-500 font-medium">
+              {selectedProductIds.length} seleccionado{selectedProductIds.length !== 1 ? 's' : ''} de {products.length} productos
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleDeleteSelected}
+            disabled={selectedProductIds.length === 0 || deletingMultiple}
+            className="text-xs bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-3.5 py-1.5 rounded font-semibold shadow-sm transition-colors cursor-pointer flex items-center gap-1"
+          >
+            {deletingMultiple ? (
+              <>
+                <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
+                Eliminando...
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Eliminar seleccionados
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
       {products.length === 0 ? (
         <p className="text-gray-500 text-sm italic">No hay productos. Añade uno usando el formulario de arriba.</p>
       ) : (
@@ -351,6 +440,14 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
           <table className="min-w-full divide-y divide-gray-200 border rounded-md">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
+                  <input
+                    type="checkbox"
+                    checked={products.length > 0 && selectedProductIds.length === products.length}
+                    onChange={handleSelectAllToggle}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoría</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio</th>
@@ -358,47 +455,58 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {products.map(product => (
-                <tr key={product.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                     <div className="flex items-center">
-                      {product.image_url && (
-                        <div className="flex-shrink-0 h-10 w-10 mr-4">
-                          <img className="h-10 w-10 rounded-full object-cover" src={product.image_url} alt="" />
-                        </div>
-                      )}
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                        {product.description && (
-                          <div className="text-sm text-gray-500 truncate max-w-xs">{product.description}</div>
+              {products.map(product => {
+                const isSelected = selectedProductIds.includes(product.id);
+                return (
+                  <tr key={product.id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-50/20' : ''}`}>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleSelectToggle(product.id)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                       <div className="flex items-center">
+                        {product.image_url && (
+                          <div className="flex-shrink-0 h-10 w-10 mr-4">
+                            <img className="h-10 w-10 rounded-full object-cover border border-gray-100 shadow-sm" src={product.image_url} alt="" />
+                          </div>
                         )}
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                          {product.description && (
+                            <div className="text-sm text-gray-500 truncate max-w-xs">{product.description}</div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                      {product.categories?.name || 'Sin categoría'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(product.price || 0)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => handleEdit(product)}
-                      className="text-indigo-600 hover:text-indigo-900 mr-4"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => handleDelete(product.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        {product.categories?.name || 'Sin categoría'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(product.price || 0)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        onClick={() => handleEdit(product)}
+                        className="text-indigo-600 hover:text-indigo-900 mr-4 cursor-pointer"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product.id)}
+                        className="text-red-600 hover:text-red-900 cursor-pointer"
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
