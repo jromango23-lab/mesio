@@ -16,7 +16,9 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
     description: '',
     price: '',
     image_url: '',
-    category_id: ''
+    category_id: '',
+    availability_status: 'available',
+    availability_note: ''
   });
   
   const [saving, setSaving] = useState(false);
@@ -25,9 +27,10 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
 
   const activeRestaurantId = targetRestaurantId || restaurantId;
 
-  // Filter/Sort/Pagination States
+  // Filter/Sort/Pagination/Availability States
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const [sortBy, setSortBy] = useState('name-asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [isFormCollapsed, setIsFormCollapsed] = useState(true);
@@ -35,12 +38,12 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
   // Reset selection when filters, page, or restaurant changes
   useEffect(() => {
     setSelectedProductIds([]);
-  }, [searchTerm, selectedCategory, sortBy, currentPage, activeRestaurantId]);
+  }, [searchTerm, selectedCategory, filterStatus, sortBy, currentPage, activeRestaurantId]);
 
   // Go to page 1 when filter options are updated
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCategory, sortBy]);
+  }, [searchTerm, selectedCategory, filterStatus, sortBy]);
 
   // Locally filtered and sorted products list
   const filteredAndSortedProducts = useMemo(() => {
@@ -50,7 +53,8 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
       const descMatch = (p.description || '').toLowerCase().includes(search);
       const matchesSearch = !search || nameMatch || descMatch;
       const matchesCategory = !selectedCategory || p.category_id === selectedCategory;
-      return matchesSearch && matchesCategory;
+      const matchesStatus = !filterStatus || p.availability_status === filterStatus;
+      return matchesSearch && matchesCategory && matchesStatus;
     });
 
     return [...result].sort((a, b) => {
@@ -68,7 +72,7 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
       }
       return 0;
     });
-  }, [products, searchTerm, selectedCategory, sortBy]);
+  }, [products, searchTerm, selectedCategory, filterStatus, sortBy]);
 
   // Keep page number valid if products list decreases
   useEffect(() => {
@@ -173,7 +177,9 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
       description: product.description || '',
       price: product.price || '',
       image_url: product.image_url || '',
-      category_id: product.category_id
+      category_id: product.category_id,
+      availability_status: product.availability_status || 'available',
+      availability_note: product.availability_note || ''
     });
     setIsFormCollapsed(false);
     setMessage({ type: '', text: '' });
@@ -186,7 +192,9 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
       description: '',
       price: '',
       image_url: '',
-      category_id: ''
+      category_id: '',
+      availability_status: 'available',
+      availability_note: ''
     });
     setIsFormCollapsed(true);
     setMessage({ type: '', text: '' });
@@ -209,7 +217,9 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
       name: formData.name.trim(),
       description: formData.description.trim(),
       price: parseFloat(formData.price) || 0,
-      image_url: formData.image_url.trim()
+      image_url: formData.image_url.trim(),
+      availability_status: formData.availability_status || 'available',
+      availability_note: formData.availability_status === 'sold_out' ? (formData.availability_note.trim() || null) : null
     };
 
     if (editingId) {
@@ -243,6 +253,26 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
       }
     }
     setSaving(false);
+  };
+
+  const handleUpdateAvailability = async (productId, newStatus, newNote) => {
+    setMessage({ type: '', text: '' });
+    const resolvedNote = newStatus === 'sold_out' ? newNote : null;
+    const { data, error } = await supabase
+      .from('products')
+      .update({
+        availability_status: newStatus,
+        availability_note: resolvedNote
+      })
+      .eq('id', productId)
+      .select('*, categories(name)');
+
+    if (error) {
+      setMessage({ type: 'error', text: 'Error al actualizar disponibilidad: ' + error.message });
+    } else if (data) {
+      setProducts(prevProducts => prevProducts.map(p => p.id === productId ? data[0] : p));
+      setMessage({ type: 'success', text: 'Disponibilidad actualizada exitosamente.' });
+    }
   };
 
   const handleDelete = async (id) => {
@@ -477,6 +507,35 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Disponibilidad</label>
+                  <select
+                    name="availability_status"
+                    value={formData.availability_status}
+                    onChange={handleInputChange}
+                    className="w-full rounded-md border-slate-200 bg-white hover:bg-slate-50/50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 text-xs p-2 border transition-all"
+                  >
+                    <option value="available">Disponible</option>
+                    <option value="sold_out">Agotado</option>
+                    <option value="hidden">Oculto</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Nota de disponibilidad (Opcional)</label>
+                  <input
+                    type="text"
+                    name="availability_note"
+                    value={formData.availability_note}
+                    onChange={handleInputChange}
+                    placeholder="Ej: Sin stock por hoy, no disponible..."
+                    disabled={formData.availability_status !== 'sold_out'}
+                    className="w-full rounded-md border-slate-200 bg-white hover:bg-slate-50/50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 text-xs p-2 border transition-all disabled:bg-slate-100 disabled:text-slate-500"
+                  />
+                </div>
+              </div>
+
               <div className="mb-3">
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Descripción</label>
                 <textarea
@@ -524,7 +583,7 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
       </h3>
 
       <div className="bg-slate-50 border border-slate-100 p-3 rounded-lg mb-4 space-y-2">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2">
           <div>
             <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5">Buscar</label>
             <input
@@ -551,6 +610,20 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
           </div>
 
           <div>
+            <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5">Estado</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full rounded border-slate-200 bg-white hover:bg-slate-50/50 focus:bg-white focus:border-indigo-500 focus:ring-indigo-500 text-xs px-2 py-1.5 border transition-all"
+            >
+              <option value="">Todos</option>
+              <option value="available">Disponible</option>
+              <option value="sold_out">Agotado</option>
+              <option value="hidden">Oculto</option>
+            </select>
+          </div>
+
+          <div>
             <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-0.5">Ordenar por</label>
             <select
               value={sortBy}
@@ -565,12 +638,13 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
           </div>
 
           <div className="flex items-end">
-            {(searchTerm || selectedCategory || sortBy !== 'name-asc') && (
+            {(searchTerm || selectedCategory || filterStatus || sortBy !== 'name-asc') && (
               <button
                 type="button"
                 onClick={() => {
                   setSearchTerm('');
                   setSelectedCategory('');
+                  setFilterStatus('');
                   setSortBy('name-asc');
                 }}
                 className="w-full text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-700 py-1.5 px-3 rounded border border-indigo-100 transition-colors cursor-pointer text-center"
@@ -644,6 +718,7 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider">Producto</th>
                   <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider">Categoría</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider">Estado</th>
                   <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider">Precio</th>
                   <th className="px-4 py-2 text-right text-xs font-bold uppercase tracking-wider">Acciones</th>
                 </tr>
@@ -684,6 +759,50 @@ export default function ProductsManager({ restaurantId, targetRestaurantId }) {
                         <span className="px-2 py-0.5 inline-flex text-[9px] font-bold uppercase tracking-wider rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
                           {product.categories?.name || 'Sin categoría'}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex flex-col gap-1 w-32">
+                          <select
+                            value={product.availability_status || 'available'}
+                            onChange={async (e) => {
+                              const val = e.target.value;
+                              const currentNote = val === 'sold_out' ? product.availability_note : null;
+                              await handleUpdateAvailability(product.id, val, currentNote);
+                            }}
+                            className={`text-[10px] font-bold py-1 px-1.5 rounded border shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer ${
+                              product.availability_status === 'sold_out' 
+                                ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                                : product.availability_status === 'hidden'
+                                ? 'bg-slate-50 text-slate-600 border-slate-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}
+                          >
+                            <option value="available">Disponible</option>
+                            <option value="sold_out">Agotado</option>
+                            <option value="hidden">Oculto</option>
+                          </select>
+                          
+                          {product.availability_status === 'sold_out' && (
+                            <input
+                              type="text"
+                              key={`${product.id}-${product.availability_note}`}
+                              defaultValue={product.availability_note || ''}
+                              placeholder="Agregar nota (ej. Sin stock)"
+                              onBlur={async (e) => {
+                                const newNote = e.target.value.trim() || null;
+                                if (newNote !== product.availability_note) {
+                                  await handleUpdateAvailability(product.id, 'sold_out', newNote);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.target.blur();
+                                }
+                              }}
+                              className="text-[9px] text-slate-600 bg-white border border-slate-200 rounded px-1.5 py-0.5 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                            />
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-700">
                         {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(product.price || 0)}

@@ -128,6 +128,7 @@ export default function PublicMenu() {
   };
 
   const addToCart = (product, qty = 1) => {
+    if (product.availability_status === 'sold_out' || product.availability_status === 'hidden') return;
     if (!isPriceValid(product.price)) return;
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
@@ -225,7 +226,7 @@ export default function PublicMenu() {
 
       const { data: menuData, error: menuError } = await supabase
         .from('categories')
-        .select(`id, name, display_order, products (id, name, description, price, image_url)`)
+        .select(`id, name, display_order, products (id, name, description, price, image_url, availability_status, availability_note)`)
         .eq('restaurant_id', restData.id)
         .order('display_order', { ascending: true });
 
@@ -233,10 +234,13 @@ export default function PublicMenu() {
         console.error('Error fetching menu:', menuError);
         setError('Error al cargar el menú');
       } else {
-        const sortedMenuData = menuData.map(cat => ({
-          ...cat,
-          products: cat.products.sort((a, b) => a.name.localeCompare(b.name))
-        }));
+        const sortedMenuData = menuData.map(cat => {
+          const visibleProducts = (cat.products || []).filter(p => p.availability_status !== 'hidden');
+          return {
+            ...cat,
+            products: visibleProducts.sort((a, b) => a.name.localeCompare(b.name))
+          };
+        });
         const activeCategories = sortedMenuData.filter(cat => cat.products && cat.products.length > 0);
         setCategories(activeCategories);
         if (activeCategories.length > 0) {
@@ -646,9 +650,21 @@ export default function PublicMenu() {
                             )}
                             <div className="p-4 flex-1 flex flex-col justify-between gap-3">
                               <div className="space-y-1">
-                                <h3 className="font-bold text-slate-800 text-sm md:text-base leading-snug group-hover:text-slate-900 transition-colors">{product.name}</h3>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <h3 className="font-bold text-slate-800 text-sm md:text-base leading-snug group-hover:text-slate-900 transition-colors">{product.name}</h3>
+                                  {product.availability_status === 'sold_out' && (
+                                    <span className="inline-block px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider text-amber-700 bg-amber-50 border border-amber-100 rounded uppercase">
+                                      Agotado
+                                    </span>
+                                  )}
+                                </div>
                                 {product.description && (
                                   <p className="text-xs text-slate-500 line-clamp-3 leading-relaxed mt-1">{product.description}</p>
+                                )}
+                                {product.availability_status === 'sold_out' && product.availability_note && (
+                                  <p className="text-[10px] text-amber-600 font-medium italic mt-1 bg-amber-50/50 px-2 py-1 rounded border border-amber-100/50">
+                                    {product.availability_note}
+                                  </p>
                                 )}
                               </div>
                               <div className="flex justify-between items-center pt-2 border-t border-slate-100/60 mt-auto">
@@ -661,16 +677,25 @@ export default function PublicMenu() {
                                     : 'Precio por consultar'}
                                 </span>
                                 {isPriceValid(product.price) && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      addToCart(product, 1);
-                                    }}
-                                    className="px-3 py-1.5 text-xs font-bold rounded-lg text-white transition-all flex items-center gap-1 active:scale-95 cursor-pointer shadow-sm"
-                                    style={{ backgroundColor: restaurant?.primary_color || '#4f46e5' }}
-                                  >
-                                    Agregar
-                                  </button>
+                                  product.availability_status === 'sold_out' ? (
+                                    <button
+                                      disabled
+                                      className="px-3 py-1.5 text-xs font-bold rounded-lg text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed shadow-none select-none pointer-events-none"
+                                    >
+                                      Agotado
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        addToCart(product, 1);
+                                      }}
+                                      className="px-3 py-1.5 text-xs font-bold rounded-lg text-white transition-all flex items-center gap-1 active:scale-95 cursor-pointer shadow-sm"
+                                      style={{ backgroundColor: restaurant?.primary_color || '#4f46e5' }}
+                                    >
+                                      Agregar
+                                    </button>
+                                  )
                                 )}
                               </div>
                             </div>
@@ -774,7 +799,14 @@ export default function PublicMenu() {
 
             <div className="p-5 overflow-y-auto flex-1 space-y-4">
               <div>
-                <h2 className="text-lg font-extrabold text-slate-900">{selectedProductForModal.name}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-lg font-extrabold text-slate-900">{selectedProductForModal.name}</h2>
+                  {selectedProductForModal.availability_status === 'sold_out' && (
+                    <span className="inline-block px-2 py-0.5 text-[10px] font-extrabold tracking-wider text-amber-700 bg-amber-50 border border-amber-100 rounded uppercase">
+                      Agotado
+                    </span>
+                  )}
+                </div>
                 <span 
                   className="text-base font-extrabold block mt-1" 
                   style={{ color: restaurant?.primary_color || '#4f46e5' }}
@@ -791,44 +823,65 @@ export default function PublicMenu() {
                 </p>
               )}
 
+              {selectedProductForModal.availability_status === 'sold_out' && selectedProductForModal.availability_note && (
+                <p className="text-xs text-amber-600 font-medium italic mt-2 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100/50">
+                  Nota: {selectedProductForModal.availability_note}
+                </p>
+              )}
+
               {/* Quantity Select and Action Add */}
               {isPriceValid(selectedProductForModal.price) ? (
-                <div className="flex flex-col sm:flex-row gap-3 items-center justify-between pt-3 border-t border-slate-100">
-                  <div className="flex items-center gap-3 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                selectedProductForModal.availability_status === 'sold_out' ? (
+                  <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
+                    <p className="text-xs text-amber-600 font-semibold italic text-center">
+                      Este producto está temporalmente agotado y no se puede agregar a la estimación.
+                    </p>
                     <button
+                      disabled
                       type="button"
-                      onClick={() => setModalQuantity(prev => Math.max(1, prev - 1))}
-                      disabled={modalQuantity <= 1}
-                      className="w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 rounded shadow-sm transition-colors cursor-pointer"
+                      className="w-full px-5 py-2.5 rounded-xl text-xs font-bold text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed text-center select-none pointer-events-none"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                      </svg>
-                    </button>
-                    <span className="text-sm font-extrabold text-slate-800 w-6 text-center">{modalQuantity}</span>
-                    <button
-                      type="button"
-                      onClick={() => setModalQuantity(prev => Math.min(99, prev + 1))}
-                      disabled={modalQuantity >= 99}
-                      className="w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 rounded shadow-sm transition-colors cursor-pointer"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
+                      Agotado
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      addToCart(selectedProductForModal, modalQuantity);
-                      setSelectedProductForModal(null);
-                    }}
-                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 transition-all cursor-pointer text-center"
-                    style={{ backgroundColor: restaurant?.primary_color || '#4f46e5' }}
-                  >
-                    Agregar a mi selección
-                  </button>
-                </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-3 items-center justify-between pt-3 border-t border-slate-100">
+                    <div className="flex items-center gap-3 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setModalQuantity(prev => Math.max(1, prev - 1))}
+                        disabled={modalQuantity <= 1}
+                        className="w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 rounded shadow-sm transition-colors cursor-pointer"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                        </svg>
+                      </button>
+                      <span className="text-sm font-extrabold text-slate-800 w-6 text-center">{modalQuantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => setModalQuantity(prev => Math.min(99, prev + 1))}
+                        disabled={modalQuantity >= 99}
+                        className="w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 rounded shadow-sm transition-colors cursor-pointer"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        addToCart(selectedProductForModal, modalQuantity);
+                        setSelectedProductForModal(null);
+                      }}
+                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 transition-all cursor-pointer text-center"
+                      style={{ backgroundColor: restaurant?.primary_color || '#4f46e5' }}
+                    >
+                      Agregar a mi selección
+                    </button>
+                  </div>
+                )
               ) : (
                 <p className="text-xs text-rose-600 font-semibold italic pt-2 text-center">
                   Este producto no cuenta con precio establecido y no puede sumarse a la estimación.
