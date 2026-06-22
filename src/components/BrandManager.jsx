@@ -4,7 +4,9 @@ import { supabase } from '../lib/supabase';
 export default function BrandManager({ restaurant, onBrandUpdate, targetRestaurantId }) {
   const [localRestaurant, setLocalRestaurant] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
+  const [bgFile, setBgFile] = useState(null);
   const [primaryColor, setPrimaryColor] = useState(restaurant?.primary_color || '#2563eb');
+  const [bgUrl, setBgUrl] = useState(restaurant?.background_url || null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -16,6 +18,12 @@ export default function BrandManager({ restaurant, onBrandUpdate, targetRestaura
   if (!targetRestaurantId && restaurant && restaurant.primary_color !== prevColorProp) {
     setPrevColorProp(restaurant.primary_color);
     setPrimaryColor(restaurant.primary_color || '#2563eb');
+  }
+
+  const [prevBgProp, setPrevBgProp] = useState(restaurant?.background_url);
+  if (!targetRestaurantId && restaurant && restaurant.background_url !== prevBgProp) {
+    setPrevBgProp(restaurant.background_url);
+    setBgUrl(restaurant.background_url || null);
   }
 
   useEffect(() => {
@@ -31,6 +39,7 @@ export default function BrandManager({ restaurant, onBrandUpdate, targetRestaura
           if (fetchError) throw fetchError;
           setLocalRestaurant(data);
           setPrimaryColor(data.primary_color || '#2563eb');
+          setBgUrl(data.background_url || null);
         } catch (err) {
           console.error('Error fetching restaurant in BrandManager:', err);
           setError('No se pudo cargar la información del restaurante.');
@@ -48,6 +57,14 @@ export default function BrandManager({ restaurant, onBrandUpdate, targetRestaura
     }
   };
 
+  const handleBgFileChange = (e) => {
+    if (e.target.files.length > 0) {
+      setBgFile(e.target.files[0]);
+      setSuccess(null);
+      setError(null);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!currentRestaurant) {
@@ -60,6 +77,7 @@ export default function BrandManager({ restaurant, onBrandUpdate, targetRestaura
     setSuccess(null);
 
     let newLogoUrl = currentRestaurant.logo_url;
+    let newBgUrl = bgUrl;
 
     try {
       // 1. Si hay un nuevo archivo de logo, subirlo
@@ -71,7 +89,7 @@ export default function BrandManager({ restaurant, onBrandUpdate, targetRestaura
         const { error: uploadError } = await supabase.storage
           .from('restaurant-assets')
           .upload(filePath, logoFile, {
-            cacheControl: '3600',
+            cacheControl: '3605',
             upsert: false,
           });
 
@@ -87,12 +105,38 @@ export default function BrandManager({ restaurant, onBrandUpdate, targetRestaura
         newLogoUrl = publicUrlData.publicUrl;
       }
 
+      // 1.5 Si hay un nuevo archivo de fondo, subirlo
+      if (bgFile) {
+        const fileExt = bgFile.name.split('.').pop();
+        const fileName = `bg-${Date.now()}.${fileExt}`;
+        const filePath = `${currentRestaurant.id}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('restaurant-assets')
+          .upload(filePath, bgFile, {
+            cacheControl: '3605',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        // Obtener la URL pública del archivo subido
+        const { data: publicUrlData } = supabase.storage
+          .from('restaurant-assets')
+          .getPublicUrl(filePath);
+
+        newBgUrl = publicUrlData.publicUrl;
+      }
+
       // 2. Actualizar la tabla del restaurante con los nuevos datos
       const { data, error: updateError } = await supabase
         .from('restaurants')
         .update({
           logo_url: newLogoUrl,
           primary_color: primaryColor,
+          background_url: newBgUrl,
         })
         .eq('id', currentRestaurant.id)
         .select()
@@ -103,6 +147,7 @@ export default function BrandManager({ restaurant, onBrandUpdate, targetRestaura
       }
 
       setSuccess('¡Marca actualizada con éxito!');
+      setBgUrl(data.background_url || null);
       if (targetRestaurantId) {
         setLocalRestaurant(data);
       }
@@ -116,6 +161,7 @@ export default function BrandManager({ restaurant, onBrandUpdate, targetRestaura
     } finally {
       setUploading(false);
       setLogoFile(null); // Reset file input
+      setBgFile(null); // Reset background file input
     }
   };
 
@@ -128,7 +174,7 @@ export default function BrandManager({ restaurant, onBrandUpdate, targetRestaura
         Identidad de Marca
       </h2>
       
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div>
           <label htmlFor="restaurantName" className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
             Nombre del Restaurante
@@ -171,6 +217,62 @@ export default function BrandManager({ restaurant, onBrandUpdate, targetRestaura
                 </p>
               ) : (
                 <p className="text-[10px] text-slate-400 mt-1">PNG, JPG, WebP o SVG. Máx 5MB.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            Fondo del menú
+          </label>
+          <div className="text-[11px] text-slate-400 mb-2">
+            Esta imagen se verá como portada cuando el cliente escanee el QR.
+          </div>
+          <div className="mt-1 flex items-center gap-4">
+            {bgFile || bgUrl ? (
+              <div className="relative h-16 w-24 rounded-lg bg-slate-50 border border-slate-200 overflow-hidden flex items-center justify-center">
+                {bgFile ? (
+                  <span className="text-[10px] text-indigo-600 font-bold p-1 text-center truncate">{bgFile.name}</span>
+                ) : (
+                  <img src={bgUrl} alt="Fondo" className="h-full w-full object-cover" />
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBgUrl(null);
+                    setBgFile(null);
+                  }}
+                  className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-0.5 shadow-sm transition-colors cursor-pointer"
+                  title="Quitar fondo"
+                >
+                  <svg xmlns="http://www.w3.org/2050/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} className="w-3.5 h-3.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <div className="h-16 w-24 bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-center">
+                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider text-center px-1">Sin fondo</span>
+              </div>
+            )}
+            <div>
+              <label htmlFor="bg-upload" className="cursor-pointer inline-flex items-center gap-1.5 bg-white py-1.5 px-3 border border-slate-200 rounded-lg shadow-sm text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" className="w-4 h-4 text-slate-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                {bgFile ? 'Cambiar archivo' : 'Subir fondo'}
+              </label>
+              <input id="bg-upload" name="bg-upload" type="file" className="sr-only" onChange={handleBgFileChange} accept="image/png, image/jpeg, image/webp" />
+              {bgFile ? (
+                <p className="text-[11px] text-indigo-600 font-semibold mt-1 flex items-center gap-0.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" />
+                  </svg>
+                  {bgFile.name}
+                </p>
+              ) : (
+                <p className="text-[10px] text-slate-400 mt-1">PNG, JPG o WebP. Máx 5MB.</p>
               )}
             </div>
           </div>

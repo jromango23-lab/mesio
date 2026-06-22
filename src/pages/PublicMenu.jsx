@@ -28,6 +28,9 @@ export default function PublicMenu() {
 
   const [restaurant, setRestaurant] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [menus, setMenus] = useState([]);
+  const [activeMenuId, setActiveMenuId] = useState(null);
+  const [allCategories, setAllCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [failedImages, setFailedImages] = useState(new Set());
@@ -106,6 +109,33 @@ export default function PublicMenu() {
       document.body.style.overflow = '';
     };
   }, [selectedProductForModal, isCartDrawerOpen]);
+
+  // Derive categories from activeMenuId and allCategories
+  useEffect(() => {
+    if (allCategories.length === 0) {
+      setCategories([]);
+      return;
+    }
+
+    const defaultMenu = menus.find(m => m.is_default);
+    const defaultMenuId = defaultMenu?.id;
+
+    const filtered = allCategories.filter(cat => {
+      if (!activeMenuId) return true;
+      if (activeMenuId === defaultMenuId) {
+        return cat.menu_id === activeMenuId || cat.menu_id === null;
+      }
+      return cat.menu_id === activeMenuId;
+    });
+
+    setCategories(filtered);
+
+    if (filtered.length > 0) {
+      setActiveCategoryId(filtered[0].id);
+    } else {
+      setActiveCategoryId(null);
+    }
+  }, [allCategories, activeMenuId, menus]);
 
   // Close overlays on Escape keypress
   useEffect(() => {
@@ -190,7 +220,7 @@ export default function PublicMenu() {
 
       const { data: restData, error: restError } = await supabase
         .from('restaurants')
-        .select('id, name, logo_url, primary_color, is_active')
+        .select('id, name, logo_url, primary_color, is_active, background_url')
         .eq('slug', slug)
         .single();
       
@@ -224,9 +254,31 @@ export default function PublicMenu() {
         }
       }
 
+      // Fetch menus
+      const { data: menusData, error: menusError } = await supabase
+        .from('restaurant_menus')
+        .select('*')
+        .eq('restaurant_id', restData.id)
+        .eq('is_active', true)
+        .order('display_order', { ascending: true });
+
+      if (menusError) {
+        console.error('Error fetching menus:', menusError);
+      } else {
+        const activeMs = menusData || [];
+        setMenus(activeMs);
+        if (activeMs.length === 1) {
+          // If only 1 menu is active, directly select it
+          setActiveMenuId(activeMs[0].id);
+        } else {
+          // If >= 2 menus are active, start at the index cover screen (activeMenuId = null)
+          setActiveMenuId(null);
+        }
+      }
+
       const { data: menuData, error: menuError } = await supabase
         .from('categories')
-        .select(`id, name, display_order, products (id, name, description, price, image_url, availability_status, availability_note)`)
+        .select(`id, name, display_order, menu_id, products (id, name, description, price, image_url, availability_status, availability_note, display_order)`)
         .eq('restaurant_id', restData.id)
         .order('display_order', { ascending: true });
 
@@ -238,14 +290,15 @@ export default function PublicMenu() {
           const visibleProducts = (cat.products || []).filter(p => p.availability_status !== 'hidden');
           return {
             ...cat,
-            products: visibleProducts.sort((a, b) => a.name.localeCompare(b.name))
+            products: visibleProducts.sort((a, b) => {
+              const orderDiff = (a.display_order || 0) - (b.display_order || 0);
+              if (orderDiff !== 0) return orderDiff;
+              return a.name.localeCompare(b.name);
+            })
           };
         });
         const activeCategories = sortedMenuData.filter(cat => cat.products && cat.products.length > 0);
-        setCategories(activeCategories);
-        if (activeCategories.length > 0) {
-          setActiveCategoryId(activeCategories[0].id);
-        }
+        setAllCategories(activeCategories);
       }
     } catch (err) {
       console.error('Unexpected error:', err);
@@ -455,10 +508,23 @@ export default function PublicMenu() {
     categoryTitle: { color: restaurant?.primary_color || '#1e293b' },
   };
 
+  const primary = restaurant?.primary_color || '#4f46e5';
+  const dynamicPaddingBottom = (cart.length > 0 ? 80 : 0) + (menus.length >= 2 && activeMenuId !== null ? 80 : 20) + 'px';
+  const isHome = activeMenuId === null && menus.length >= 2;
+
+  const dynamicBackgroundStyle = {
+    background: restaurant?.background_url 
+      ? `url(${restaurant.background_url}) center/cover no-repeat fixed` 
+      : (isHome 
+          ? `linear-gradient(180deg, ${hexToRgba(primary, 0.08)} 0%, #ffffff 35%, #f8fafc 100%)`
+          : `linear-gradient(180deg, ${hexToRgba(primary, 0.04)} 0%, #ffffff 25%, #f8fafc 100%)`),
+    paddingBottom: dynamicPaddingBottom
+  };
+
   return (
     <div 
-      className="min-h-screen bg-slate-50/50 font-sans text-slate-800"
-      style={{ paddingBottom: cart.length > 0 ? '90px' : '0px' }}
+      className="min-h-screen relative overflow-hidden font-sans text-slate-800"
+      style={dynamicBackgroundStyle}
     >
       <style>{`
         .no-scrollbar::-webkit-scrollbar {
@@ -491,32 +557,102 @@ export default function PublicMenu() {
         }
       `}</style>
 
+      {/* Background image overlay layer for glassmorphism cover */}
+      {restaurant.background_url && (
+        <div 
+          className={`absolute inset-0 z-0 pointer-events-none transition-all duration-500 ${
+            isHome ? 'bg-white/80 backdrop-blur-[5px]' : 'bg-white/96 backdrop-blur-[8px]'
+          }`} 
+        />
+      )}
+
+      {/* Dynamic identity background wrapper */}
+      {!restaurant.background_url && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0 select-none">
+          {/* Dynamic gradient background */}
+          <div 
+            className="absolute inset-0 opacity-[0.04] transition-all duration-500" 
+            style={{ 
+              background: `radial-gradient(circle at 10% 20%, ${restaurant.primary_color || '#4f46e5'} 0%, transparent 80%)` 
+            }}
+          />
+          {/* Decorative blur circle 1 */}
+          <div 
+            className="absolute -top-40 -left-40 w-[450px] h-[450px] rounded-full blur-[100px] transition-all duration-700"
+            style={{ 
+              backgroundColor: restaurant.primary_color || '#4f46e5',
+              opacity: isHome ? 0.06 : 0.03
+            }}
+          />
+          {/* Decorative blur circle 2 */}
+          <div 
+            className="absolute top-1/2 -right-40 w-[500px] h-[500px] rounded-full blur-[120px] transition-all duration-700 -translate-y-1/2"
+            style={{ 
+              backgroundColor: restaurant.primary_color || '#4f46e5',
+              opacity: isHome ? 0.05 : 0.02
+            }}
+          />
+        </div>
+      )}
+
       {/* Banner superior compacto */}
-      <div 
-        className="w-full h-28 md:h-36 relative overflow-hidden"
-        style={{ 
-          background: `linear-gradient(135deg, ${hexToRgba(restaurant.primary_color, 0.95)} 0%, ${hexToRgba(restaurant.primary_color, 0.45)} 100%)`
-        }}
-      >
-        <div className="absolute inset-0 bg-black/5"></div>
-      </div>
+      {(!isHome || !restaurant.background_url) && (
+        <div 
+          className="w-full h-28 md:h-36 relative overflow-hidden border-b border-slate-100/50"
+          style={{ 
+            background: `linear-gradient(135deg, ${hexToRgba(primary, 0.18)} 0%, ${hexToRgba(primary, 0.04)} 100%)`
+          }}
+        >
+          <div className="absolute inset-0 bg-white/10"></div>
+        </div>
+      )}
 
       {/* Floating Logo and Info center card */}
-      <div className="max-w-6xl mx-auto px-4 relative z-10 -mt-10 mb-6">
+      <div className={`max-w-6xl mx-auto px-4 relative z-10 ${isHome && restaurant.background_url ? 'pt-16' : '-mt-16'} mb-6`}>
         <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm text-center max-w-lg mx-auto transition-all duration-350 hover:shadow-md">
-          {restaurant.logo_url && (
-            <div className="relative inline-block -mt-16 mb-3">
-              <img 
-                src={restaurant.logo_url} 
-                alt={`${restaurant.name} logo`} 
-                className="h-20 w-20 md:h-24 md:w-24 rounded-full bg-white p-1 shadow-md border border-slate-100 object-contain mx-auto ring-4 ring-white" 
-              />
-            </div>
-          )}
+          {(() => {
+            const logoClasses = isHome 
+              ? "h-28 w-28 md:h-36 md:w-36 rounded-full bg-white p-1.5 shadow-md border object-contain mx-auto ring-4 ring-white/60 transition-all duration-300"
+              : "h-20 w-20 md:h-24 md:w-24 rounded-full bg-white p-1 shadow-md border object-contain mx-auto ring-4 ring-white/60 transition-all duration-300";
+            
+            const fallbackClasses = isHome
+              ? "h-28 w-28 md:h-36 md:w-36 rounded-full mx-auto flex items-center justify-center font-black text-4xl shadow-md ring-4 ring-white/60 border transition-all duration-300"
+              : "h-20 w-20 md:h-24 md:w-24 rounded-full mx-auto flex items-center justify-center font-black text-3xl shadow-md ring-4 ring-white/60 border transition-all duration-300";
+
+            return (
+              <div className={`relative inline-block ${isHome && restaurant.background_url ? '-mt-24 mb-4' : (isHome ? '-mt-28 mb-4' : '-mt-20 mb-3')} transition-all duration-300`}>
+                {restaurant.logo_url ? (
+                  <img 
+                    src={restaurant.logo_url} 
+                    alt={`${restaurant.name} logo`} 
+                    className={logoClasses}
+                    style={{ borderColor: hexToRgba(primary, 0.25) }}
+                  />
+                ) : (
+                  <div 
+                    className={fallbackClasses}
+                    style={{ 
+                      backgroundColor: hexToRgba(primary, 0.06), 
+                      color: primary, 
+                      borderColor: hexToRgba(primary, 0.25) 
+                    }}
+                  >
+                    {restaurant.name?.[0] || 'M'}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           
           <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight leading-snug">
             {restaurant.name}
           </h1>
+
+          {activeMenuId !== null && menus.length >= 2 && (
+            <p className="text-sm font-extrabold text-slate-500 mt-1 uppercase tracking-wider">
+              {menus.find(m => m.id === activeMenuId)?.name}
+            </p>
+          )}
 
           <div className="mt-2.5 flex items-center justify-center gap-2 flex-wrap">
             <div className="flex items-center gap-1.5">
@@ -568,8 +704,23 @@ export default function PublicMenu() {
         </div>
       </div>
 
+      {/* Botón de volver al índice (si hay 2 o más menús y estamos en el detalle de uno) */}
+      {menus.length >= 2 && activeMenuId !== null && (
+        <div className="max-w-6xl mx-auto px-4 mb-4 animate-fade-in">
+          <button
+            onClick={() => setActiveMenuId(null)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-2xs"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-3.5 h-3.5 text-slate-500">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+            </svg>
+            <span>Volver a Menús</span>
+          </button>
+        </div>
+      )}
+
       {/* Glassmorphic sticky categories pills bar */}
-      {categories.length > 1 && (
+      {activeMenuId !== null && categories.length > 1 && (
         <div className="bg-white/70 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-30 shadow-sm">
           <div className="max-w-6xl mx-auto px-4 py-2.5 flex overflow-x-auto no-scrollbar gap-2 scroll-smooth">
             {categories.map(cat => {
@@ -580,12 +731,16 @@ export default function PublicMenu() {
                   id={`nav-btn-${cat.id}`}
                   href={`#category-${cat.id}`}
                   onClick={() => handleCategoryClick(cat.id)}
-                  className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-200 active:scale-95 cursor-pointer select-none border ${
-                    isActive
-                      ? 'text-white shadow-sm border-transparent'
-                      : 'text-slate-600 bg-slate-100/80 border-transparent hover:bg-slate-200/80 hover:text-slate-800'
-                  }`}
-                  style={isActive ? { backgroundColor: restaurant?.primary_color || '#4f46e5' } : {}}
+                  className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-200 active:scale-95 cursor-pointer select-none border`}
+                  style={isActive ? { 
+                    backgroundColor: restaurant?.primary_color || '#4f46e5',
+                    color: '#ffffff',
+                    borderColor: 'transparent'
+                  } : {
+                    backgroundColor: hexToRgba(restaurant?.primary_color || '#4f46e5', 0.04),
+                    color: restaurant?.primary_color || '#4f46e5',
+                    borderColor: hexToRgba(restaurant?.primary_color || '#4f46e5', 0.15)
+                  }}
                 >
                   {cat.name}
                 </a>
@@ -594,10 +749,116 @@ export default function PublicMenu() {
           </div>
         </div>
       )}
-
       {/* Main menu content */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 mb-16">
-        {categories.length === 0 ? (
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 mb-16 relative z-10">
+        {menus.length >= 2 && activeMenuId === null ? (
+          <div className="max-w-md mx-auto space-y-6 py-6 animate-fade-in animate-slide-up">
+            <div className="text-center space-y-1.5 mb-2">
+              <span className="text-[10px] uppercase font-extrabold tracking-widest text-slate-500" style={{ color: hexToRgba(primary, 0.7) }}>
+                Selecciona una carta
+              </span>
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+                Nuestras Cartas
+              </h2>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-4">
+              {menus.map(menu => {
+                const accent = menu.accent_color || primary;
+                const hasCover = menu.cover_image_url && !failedImages.has(menu.id);
+                const catCount = allCategories.filter(c => {
+                  const defaultMenu = menus.find(m => m.is_default);
+                  if (menu.id === defaultMenu?.id) {
+                    return c.menu_id === menu.id || c.menu_id === null;
+                  }
+                  return c.menu_id === menu.id;
+                }).length;
+
+                const cardStyles = hasCover 
+                  ? { 
+                      boxShadow: `0 10px 30px -4px ${hexToRgba(accent, 0.25)}`,
+                      borderColor: hexToRgba(accent, 0.2)
+                    }
+                  : {
+                      borderColor: hexToRgba(accent, 0.15),
+                      borderLeftColor: accent,
+                      boxShadow: `0 8px 30px -4px ${hexToRgba(accent, 0.12)}`
+                    };
+
+                return (
+                  <button
+                    key={menu.id}
+                    onClick={() => {
+                      setActiveMenuId(menu.id);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className={`w-full text-left rounded-2xl border transition-all duration-300 active:scale-98 flex items-center justify-between group cursor-pointer ${
+                      hasCover ? 'min-h-[140px] p-6 relative overflow-hidden' : 'bg-white/95 backdrop-blur-md p-6 border-l-4'
+                    }`}
+                    style={cardStyles}
+                  >
+                    {hasCover && (
+                      <>
+                        <img 
+                          src={menu.cover_image_url} 
+                          alt={menu.name}
+                          className="absolute inset-0 w-full h-full object-cover z-0 transition-transform duration-500 group-hover:scale-105"
+                          onError={() => handleImageError(menu.id)}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-900/65 to-transparent z-10" />
+                      </>
+                    )}
+
+                    <div className={`space-y-1.5 pr-4 flex-1 relative z-20 ${hasCover ? 'text-white' : 'text-slate-800'}`}>
+                      <div className="flex items-center gap-2.5">
+                        {!hasCover ? (
+                          menu.icon_text ? (
+                            <span className="text-3xl flex-shrink-0">{menu.icon_text}</span>
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black text-white flex-shrink-0" style={{ backgroundColor: accent }}>
+                              {menu.name.charAt(0).toUpperCase()}
+                            </div>
+                          )
+                        ) : (
+                          menu.icon_text && <span className="text-xl md:text-2xl flex-shrink-0">{menu.icon_text}</span>
+                        )}
+                        <h3 className={`font-extrabold text-base md:text-xl transition-colors ${
+                          hasCover ? 'text-white' : 'text-slate-900 group-hover:text-indigo-650'
+                        }`}>
+                          {menu.name}
+                        </h3>
+                      </div>
+                      {menu.description && (
+                        <p className={`text-xs line-clamp-2 leading-relaxed ${
+                          hasCover ? 'text-slate-200' : 'text-slate-500'
+                        }`}>
+                          {menu.description}
+                        </p>
+                      )}
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold mt-1 ${
+                        hasCover ? 'text-slate-300' : 'text-slate-455'
+                      }`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-3 h-3">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.007 8.25H3.75v-.008h.007V15Zm0 2.25H3.75v-.008h.007v.008Z" />
+                        </svg>
+                        {catCount} {catCount === 1 ? 'categoría' : 'categorías'}
+                      </span>
+                    </div>
+
+                    <div 
+                      className="p-3 rounded-full text-white flex-shrink-0 group-hover:translate-x-1 transition-all relative z-20"
+                      style={{ backgroundColor: accent }}
+                    >
+                      <svg xmlns="http://www.w3.org/2050/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                      </svg>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : categories.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-2xl border border-slate-100 shadow-sm max-w-lg mx-auto">
             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" className="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
@@ -718,9 +979,21 @@ export default function PublicMenu() {
                             )}
                             <div className="p-3 flex-1 flex flex-col justify-between min-w-0">
                               <div className="min-w-0">
-                                <h3 className="font-bold text-slate-800 text-xs leading-snug truncate">{product.name}</h3>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <h3 className="font-bold text-slate-800 text-xs leading-snug truncate">{product.name}</h3>
+                                  {product.availability_status === 'sold_out' && (
+                                    <span className="inline-block px-1.5 py-0.5 text-[8px] font-extrabold tracking-wider text-amber-700 bg-amber-50 border border-amber-100 rounded uppercase">
+                                      Agotado
+                                    </span>
+                                  )}
+                                </div>
                                 {product.description && (
                                   <p className="text-[10px] text-slate-500 line-clamp-2 leading-tight mt-0.5">{product.description}</p>
+                                )}
+                                {product.availability_status === 'sold_out' && product.availability_note && (
+                                  <p className="text-[9px] text-amber-600 font-medium italic mt-1 bg-amber-50/50 px-2 py-0.5 rounded border border-amber-100/50">
+                                    {product.availability_note}
+                                  </p>
                                 )}
                               </div>
                               <div className="flex justify-between items-center mt-1.5">
@@ -733,16 +1006,25 @@ export default function PublicMenu() {
                                     : 'Precio por consultar'}
                                 </span>
                                 {isPriceValid(product.price) && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      addToCart(product, 1);
-                                    }}
-                                    className="px-2.5 py-1 text-[10px] font-bold rounded-lg text-white transition-all flex items-center gap-1 active:scale-95 cursor-pointer shadow-sm"
-                                    style={{ backgroundColor: restaurant?.primary_color || '#4f46e5' }}
-                                  >
-                                    Agregar
-                                  </button>
+                                  product.availability_status === 'sold_out' ? (
+                                    <button
+                                      disabled
+                                      className="px-2.5 py-1 text-[10px] font-bold rounded-lg text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed shadow-none select-none pointer-events-none"
+                                    >
+                                      Agotado
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        addToCart(product, 1);
+                                      }}
+                                      className="px-2.5 py-1 text-[10px] font-bold rounded-lg text-white transition-all flex items-center gap-1 active:scale-95 cursor-pointer shadow-sm"
+                                      style={{ backgroundColor: restaurant?.primary_color || '#4f46e5' }}
+                                    >
+                                      Agregar
+                                    </button>
+                                  )
                                 )}
                               </div>
                             </div>
@@ -894,7 +1176,10 @@ export default function PublicMenu() {
 
       {/* Fixed Bottom Bar */}
       {cart.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-4 py-3 shadow-lg z-40 flex items-center justify-between animate-slide-up max-w-lg mx-auto rounded-t-2xl sm:border-x">
+        <div 
+          className="fixed inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-4 py-3 shadow-lg z-40 flex items-center justify-between animate-slide-up max-w-lg mx-auto rounded-t-2xl sm:border-x"
+          style={{ bottom: menus.length >= 2 && activeMenuId !== null ? '64px' : '0px' }}
+        >
           <div>
             <span className="text-[10px] text-slate-500 font-semibold block">Total Estimado</span>
             <span className="text-base font-extrabold text-slate-900">
@@ -1139,6 +1424,88 @@ export default function PublicMenu() {
           </div>
         </div>
       )}
+      {/* Sticky Bottom Navigation Bar for menus */}
+      {menus.length >= 2 && activeMenuId !== null && (() => {
+        const activeMs = menus.filter(m => m.is_active);
+        if (activeMs.length < 2) return null;
+        const half = Math.ceil(activeMs.length / 2);
+        const left = activeMs.slice(0, half);
+        const right = activeMs.slice(half);
+        return (
+          <div className="fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur-md border-t shadow-lg z-40 max-w-lg mx-auto rounded-t-2xl sm:border-x" style={{ borderTopColor: hexToRgba(restaurant?.primary_color || '#4f46e5', 0.25) }}>
+            <div className="flex items-center justify-between px-3 py-2 h-16">
+              {/* Left Menus */}
+              <div className="flex-1 flex justify-around gap-1 overflow-x-auto no-scrollbar">
+                {left.map(m => {
+                  const isActive = m.id === activeMenuId;
+                  const accent = m.accent_color || restaurant?.primary_color || '#4f46e5';
+                  const displayName = m.name.length > 12 ? `${m.name.slice(0, 10)}...` : m.name;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        setActiveMenuId(m.id);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className={`px-2 py-1.5 rounded-lg text-[10px] font-extrabold transition-all truncate max-w-[90px] cursor-pointer text-center ${
+                        isActive 
+                           ? 'text-white shadow-2xs' 
+                           : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                      }`}
+                      style={isActive ? { backgroundColor: accent } : {}}
+                    >
+                      {m.icon_text ? `${m.icon_text} ` : ''}{displayName}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Center Home Button */}
+              <div className="flex-shrink-0 px-2.5">
+                <button
+                  onClick={() => {
+                    setActiveMenuId(null);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="w-11 h-11 rounded-full flex flex-col items-center justify-center text-white shadow-md active:scale-95 transition-transform hover:brightness-105 cursor-pointer"
+                  style={{ backgroundColor: restaurant?.primary_color || '#4f46e5' }}
+                  title="Inicio"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5.5 h-5.5">
+                    <path d="M11.47 3.84a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 1-1.06 1.06l-.22-.22v7.13a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1-.75-.75V13.37l-.22.22a.75.75 0 1 1-1.06-1.06l8.69-8.69Z" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Right Menus */}
+              <div className="flex-1 flex justify-around gap-1 overflow-x-auto no-scrollbar">
+                {right.map(m => {
+                  const isActive = m.id === activeMenuId;
+                  const accent = m.accent_color || restaurant?.primary_color || '#4f46e5';
+                  const displayName = m.name.length > 12 ? `${m.name.slice(0, 10)}...` : m.name;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        setActiveMenuId(m.id);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className={`px-2 py-1.5 rounded-lg text-[10px] font-extrabold transition-all truncate max-w-[90px] cursor-pointer text-center ${
+                        isActive 
+                           ? 'text-white shadow-2xs' 
+                           : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                      }`}
+                      style={isActive ? { backgroundColor: accent } : {}}
+                    >
+                      {m.icon_text ? `${m.icon_text} ` : ''}{displayName}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
